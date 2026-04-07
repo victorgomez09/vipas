@@ -1,0 +1,399 @@
+<mxfile host="65bd71144e">
+    <diagram id="95CUWa11Kkjjh0JC6lFZ" name="Page-1">
+        <mxGraphModel dx="1557" dy="855" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="🌐 Internet" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="680" y="30" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="DNS (external-dns)&#xa;*.apps.yourdomain.com" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="670" y="170" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb_group" value="Load Balancer Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="420" y="270" width="720" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb1" value="MetalLB / Cilium BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
+                    <mxGeometry x="60" y="40" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb_note" value=":80 / :443 → Gateway Nodes" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="lb_group">
+                    <mxGeometry x="300" y="50" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb_ha" value="IP Virtual flotante&#xa;si un nodo GW cae,&#xa;BGP re-anuncia automáticamente" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="lb_group">
+                    <mxGeometry x="510" y="40" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_group" value="Gateway Nodes Pool  [taint: role=gateway:NoSchedule]" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="430" width="1180" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_node1" value="Gateway Node 1" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="30" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoy1" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium1" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="nlb1" value="hostNetwork: true&#xa;:80 / :443" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="170" y="90" width="130" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_node2" value="Gateway Node 2" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="420" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoy2" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node2">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium2" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
+                    <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_nodeN" value="Gateway Node N (escalable)" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="810" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoyN" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_nodeN">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="dots" value="..." style="text;html=1;fontSize=20;align=center;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="370" y="80" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="dots2" value="..." style="text;html=1;fontSize=20;align=center;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="760" y="80" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_api_group" value="Gateway API Objects (ns: gateway-system)" style="swimlane;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="670" width="1180" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="gwclass" value="GatewayClass&#xa;name: envoy-gateway&#xa;controllerName: gateway.envoyproxy.io/gatewayclass-controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="30" y="45" width="250" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_obj" value="Gateway&#xa;name: vipas-gateway&#xa;listeners: [http/:80, https/:443]&#xa;cert-manager gestiona TLS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="320" y="45" width="250" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httproute1" value="HTTPRoute&#xa;hostname: app1.yourdomain.com&#xa;→ svc/app1 :8080" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="610" y="45" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httproute2" value="HTTPRoute&#xa;hostname: app2.yourdomain.com&#xa;→ svc/app2 :3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="820" y="45" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httprouteN" value="HTTPRoute N&#xa;hostname: appN.yourdomain.com&#xa;→ svc/appN :porto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="1020" y="45" width="130" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="gw_api_group" source="gwclass" target="gw_obj">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="gw_api_group" source="gw_obj" target="httproute1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="gw_api_group" source="gw_obj" target="httproute2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="gw_api_group" source="gw_obj" target="httprouteN">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="certmgr" value="cert-manager&#xa;ClusterIssuer: letsencrypt-prod&#xa;(Secrets en etcd, replicados)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="1420" y="670" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp_group" value="Control Plane HA  (3 nodos — quorum etcd)" style="swimlane;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="840" width="600" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp1" value="CP Node 1&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="20" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp2" value="CP Node 2&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="215" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp3" value="CP Node 3&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="415" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="wk_group" value="Worker Nodes Pool  [sin taint — cargas de usuario]" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="840" y="840" width="630" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_a" value="ns: proyecto-A" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="20" y="40" width="180" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod1" value="Pod: app1" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_a">
+                    <mxGeometry x="20" y="35" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod2" value="Pod: app2" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_a">
+                    <mxGeometry x="20" y="85" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_b" value="ns: proyecto-B" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="220" y="40" width="180" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod3" value="Pod: appN" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_b">
+                    <mxGeometry x="20" y="35" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_db" value="ns: databases" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="420" y="40" width="190" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="db1" value="CloudNativePG&#xa;(PostgreSQL HA)" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="ns_db">
+                    <mxGeometry x="10" y="35" width="165" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="db2" value="Redis Sentinel" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="ns_db">
+                    <mxGeometry x="10" y="85" width="165" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="storage" value="Longhorn / Rook-Ceph&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="210" y="1000" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="obs" value="Observabilidad&#xa;Prometheus + Grafana&#xa;Alertmanager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="440" y="1000" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium_np" value="CiliumNetworkPolicy&#xa;L3/L4/L7 + FQDN-aware&#xa;(DaemonSet en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="670" y="1000" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="3">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="3" target="lb1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="lb_group" target="gw_node1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="lb_group" target="gw_node2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="lb_group" target="gw_nodeN">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="gw_group" target="gw_api_group">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="httproute1" target="ns_a">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="httprouteN" target="ns_b">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#d6b656;" edge="1" parent="1" source="certmgr" target="gw_obj">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" parent="1" source="ns_db" target="storage">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#d6b656;" edge="1" parent="1" source="cp_group" target="wk_group">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="di2ZBxLm8Y3iZxbTh72s" name="Page-1">
+        <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- INTERNET -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="2" value="🌐 Internet" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="680" y="30" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- DNS / external-dns -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="3" value="DNS (external-dns)&#xa;*.apps.yourdomain.com" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="670" y="170" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- LOAD BALANCER LAYER -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="lb_group" value="Load Balancer Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="420" y="270" width="720" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb1" value="MetalLB / Cilium BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
+                    <mxGeometry x="60" y="40" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb_note" value=":80 / :443 → Gateway Nodes" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="lb_group">
+                    <mxGeometry x="300" y="50" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="lb_ha" value="IP Virtual flotante&#xa;si un nodo GW cae,&#xa;BGP re-anuncia automáticamente" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="lb_group">
+                    <mxGeometry x="510" y="40" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- GATEWAY NODES (dedicados) -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="gw_group" value="Gateway Nodes Pool  [taint: role=gateway:NoSchedule]" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="430" width="1180" height="200" as="geometry"/>
+                </mxCell>
+                <!-- Envoy GW Node 1 -->
+                <mxCell id="gw_node1" value="Gateway Node 1" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="30" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoy1" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium1" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="nlb1" value="hostNetwork: true&#xa;:80 / :443" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="gw_node1">
+                    <mxGeometry x="170" y="90" width="130" height="30" as="geometry"/>
+                </mxCell>
+                <!-- Envoy GW Node 2 -->
+                <mxCell id="gw_node2" value="Gateway Node 2" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="420" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoy2" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node2">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium2" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
+                    <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <!-- Envoy GW Node N -->
+                <mxCell id="gw_nodeN" value="Gateway Node N (escalable)" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="810" y="40" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="envoyN" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_nodeN">
+                    <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="dots" value="..." style="text;html=1;fontSize=20;align=center;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="370" y="80" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="dots2" value="..." style="text;html=1;fontSize=20;align=center;fontStyle=1;" vertex="1" parent="gw_group">
+                    <mxGeometry x="760" y="80" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- GATEWAY API OBJECTS -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="gw_api_group" value="Gateway API Objects (ns: gateway-system)" style="swimlane;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="670" width="1180" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="gwclass" value="GatewayClass&#xa;name: envoy-gateway&#xa;controllerName: gateway.envoyproxy.io/gatewayclass-controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="30" y="45" width="250" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw_obj" value="Gateway&#xa;name: vipas-gateway&#xa;listeners: [http/:80, https/:443]&#xa;cert-manager gestiona TLS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="320" y="45" width="250" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httproute1" value="HTTPRoute&#xa;hostname: app1.yourdomain.com&#xa;→ svc/app1 :8080" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="610" y="45" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httproute2" value="HTTPRoute&#xa;hostname: app2.yourdomain.com&#xa;→ svc/app2 :3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="820" y="45" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="httprouteN" value="HTTPRoute N&#xa;hostname: appN.yourdomain.com&#xa;→ svc/appN :porto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_api_group">
+                    <mxGeometry x="1020" y="45" width="130" height="65" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- CERT-MANAGER -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="certmgr" value="cert-manager&#xa;ClusterIssuer: letsencrypt-prod&#xa;(Secrets en etcd, replicados)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="1420" y="670" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- CONTROL PLANE HA -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="cp_group" value="Control Plane HA  (3 nodos — quorum etcd)" style="swimlane;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="840" width="600" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp1" value="CP Node 1&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="20" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp2" value="CP Node 2&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="215" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp3" value="CP Node 3&#xa;API Server + etcd" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="cp_group">
+                    <mxGeometry x="415" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- WORKER NODES -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="wk_group" value="Worker Nodes Pool  [sin taint — cargas de usuario]" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="840" y="840" width="630" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_a" value="ns: proyecto-A" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="20" y="40" width="180" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod1" value="Pod: app1" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_a">
+                    <mxGeometry x="20" y="35" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod2" value="Pod: app2" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_a">
+                    <mxGeometry x="20" y="85" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_b" value="ns: proyecto-B" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="220" y="40" width="180" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod3" value="Pod: appN" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_b">
+                    <mxGeometry x="20" y="35" width="140" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="ns_db" value="ns: databases" style="swimlane;startSize=20;fillColor=#f0f0f0;fontSize=10;" vertex="1" parent="wk_group">
+                    <mxGeometry x="420" y="40" width="190" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="db1" value="CloudNativePG&#xa;(PostgreSQL HA)" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="ns_db">
+                    <mxGeometry x="10" y="35" width="165" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="db2" value="Redis Sentinel" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="ns_db">
+                    <mxGeometry x="10" y="85" width="165" height="35" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- STORAGE + OBSERVABILIDAD -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <mxCell id="storage" value="Longhorn / Rook-Ceph&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="210" y="1000" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="obs" value="Observabilidad&#xa;Prometheus + Grafana&#xa;Alertmanager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="440" y="1000" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="cilium_np" value="CiliumNetworkPolicy&#xa;L3/L4/L7 + FQDN-aware&#xa;(DaemonSet en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="670" y="1000" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- FLECHAS / CONEXIONES -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- Internet → DNS -->
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="2" target="3" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- DNS → LB -->
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="3" target="lb1" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- LB → GW Node 1 -->
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="lb_group" target="gw_node1" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- LB → GW Node 2 -->
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="lb_group" target="gw_node2" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- LB → GW Node N -->
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="lb_group" target="gw_nodeN" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- GW Nodes → HTTPRoutes -->
+                <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw_group" target="gw_api_group" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- HTTPRoutes → Worker pods -->
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="httproute1" target="ns_a" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="httprouteN" target="ns_b" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- cert-manager → Gateway -->
+                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#d6b656;" edge="1" source="certmgr" target="gw_obj" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- GatewayClass → Gateway -->
+                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gwclass" target="gw_obj" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- Gateway → HTTPRoutes -->
+                <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw_obj" target="httproute1" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw_obj" target="httproute2" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw_obj" target="httprouteN" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- Workers → Storage -->
+                <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="ns_db" target="storage" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- CP → Workers (control) -->
+                <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#d6b656;" edge="1" source="cp_group" target="wk_group" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

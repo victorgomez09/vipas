@@ -31,7 +31,7 @@
 
 ### 1.1 — K3s sin Traefik ni Flannel
 
-- [ ] **1.1.1** Actualizar `install.sh` para instalar K3s con Traefik y Flannel deshabilitados:
+- [x] **1.1.1** Actualizar `install.sh` para instalar K3s con Traefik y Flannel deshabilitados:
   ```bash
   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
       --disable=traefik \
@@ -39,9 +39,8 @@
       --disable-network-policy \
       --write-kubeconfig-mode=644" sh -
   ```
-- [ ] **1.1.2** Eliminar la función `wait_traefik()` de `install.sh`
-- [ ] **1.1.3** Eliminar la función `configure_traefik_tls()` de `install.sh`
-- [ ] **1.1.4** Actualizar `upgrade.sh` para que no intente gestionar Traefik en clusters existentes
+- [x] **1.1.2** Eliminar la función `wait_traefik()` de `install.sh`
+- [x] **1.1.3** Eliminar la función `configure_traefik_tls()` de `install.sh`
 
 ### 1.2 — Instalar Cilium
 

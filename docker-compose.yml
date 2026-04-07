@@ -1,0 +1,24 @@
+## Vipas — standalone PostgreSQL for development
+## Production deployment is managed by the install script (/opt/vipas/docker-compose.yml)
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: vipas-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54321:5432"
+    environment:
+      POSTGRES_DB: vipas
+      POSTGRES_USER: vipas
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vipas"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

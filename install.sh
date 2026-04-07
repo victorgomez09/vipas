@@ -47,11 +47,11 @@ preflight() {
     # Port check — skip if K3s already installed (re-run safe)
     if ! command -v k3s >/dev/null 2>&1; then
         for port in 80 443; do
-            if ss -tlnp 2>/dev/null | grep -q ":${port} " || \
-               netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
-                fail "Port ${port} is in use. Traefik needs 80/443 for ingress."
-            fi
-        done
+                if ss -tlnp 2>/dev/null | grep -q ":${port} " || \
+                   netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
+                    fail "Port ${port} is in use. Gateway requires ports 80/443 for ingress." 
+                fi
+            done
     fi
 
     command -v curl >/dev/null 2>&1 || fail "curl is required"
@@ -79,18 +79,14 @@ install_k3s() {
         return
     fi
 
-    # Detect WireGuard support for encrypted node communication
-    FLANNEL_BACKEND="vxlan"
-    if modinfo wireguard >/dev/null 2>&1 || lsmod | grep -q wireguard; then
-        FLANNEL_BACKEND="wireguard-native"
-        info "WireGuard detected — using encrypted network"
-    else
-        info "WireGuard not available — using standard network"
-    fi
+    # For production we disable the embedded Traefik and Flannel in K3s
+    FLANNEL_BACKEND="none"
 
-    info "Installing K3s..."
+    info "Installing K3s (Traefik and Flannel disabled)..."
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+        --disable=traefik \
         --flannel-backend=$FLANNEL_BACKEND \
+        --disable-network-policy \
         --write-kubeconfig-mode=644" sh -
 
     info "Waiting for K3s..."
@@ -102,55 +98,8 @@ install_k3s() {
     ok "K3s running"
 }
 
-# ── Wait for Traefik (built into K3s) ───────────────────────────
-wait_traefik() {
-    info "Waiting for Traefik..."
-    for i in $(seq 1 60); do
-        if k3s kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].status.phase}' 2>/dev/null | grep -q Running; then
-            ok "Traefik ready (80/443)"
-            return
-        fi
-        sleep 2
-    done
-    warn "Traefik not ready yet, but may start soon"
-}
-
-# ── Configure Traefik with Let's Encrypt ───────────────────────
-configure_traefik_tls() {
-    # Skip if already configured
-    if k3s kubectl get helmchartconfig traefik -n kube-system >/dev/null 2>&1; then
-        ok "Traefik TLS already configured"
-        return
-    fi
-
-    info "Configuring Traefik with Let's Encrypt..."
-    cat <<'ACMEEOF' | k3s kubectl apply -f - >/dev/null 2>&1
-apiVersion: helm.cattle.io/v1
-kind: HelmChartConfig
-metadata:
-  name: traefik
-  namespace: kube-system
-spec:
-  valuesContent: |
-    additionalArguments:
-      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-    persistence:
-      enabled: true
-      size: 128Mi
-ACMEEOF
-
-    # Wait for Traefik to pick up the new config
-    sleep 5
-    for i in $(seq 1 30); do
-        if k3s kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].status.phase}' 2>/dev/null | grep -q Running; then
-            ok "Traefik TLS configured (Let's Encrypt)"
-            return
-        fi
-        sleep 2
-    done
-    warn "Traefik restarting — TLS may take a moment"
-}
+# Traefik is no longer managed by the installer. TLS and ingress
+# are handled by cert-manager + Envoy Gateway after Cilium is installed.
 
 # ── Generate secrets ────────────────────────────────────────────
 generate_secrets() {
@@ -295,8 +244,8 @@ summary() {
     printf "\n"
     printf "  ${BOLD}Port usage:${NC}\n"
     printf "    :3000  → Vipas panel\n"
-    printf "    :80    → Traefik HTTP  (your deployed apps)\n"
-    printf "    :443   → Traefik HTTPS (your deployed apps)\n"
+    printf "    :80    → Gateway HTTP  (your deployed apps)\n"
+    printf "    :443   → Gateway HTTPS (your deployed apps)\n"
     printf "    :6443  → K3s API\n"
     printf "\n"
     printf "  Open the panel in your browser to create your admin account.\n"
@@ -313,7 +262,6 @@ main() {
     preflight
     install_docker
     install_k3s
-    wait_traefik
     generate_secrets
     deploy
     summary

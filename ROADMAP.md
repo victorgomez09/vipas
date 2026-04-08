@@ -44,7 +44,7 @@
 
 ### 1.2 — Instalar Cilium
 
-- [ ] **1.2.1** Añadir a `install.sh` la instalación de Cilium vía Helm:
+- [x] **1.2.1** Añadir a `install.sh` la instalación de Cilium vía Helm:
   ```bash
   helm install cilium cilium/cilium \
     --namespace kube-system \
@@ -54,8 +54,8 @@
     --set hubble.relay.enabled=true \
     --set hubble.ui.enabled=true
   ```
-- [ ] **1.2.2** Añadir validación post-instalación: `cilium status --wait`
-- [ ] **1.2.3** Mantener la lógica de detección de WireGuard (ahora como `--set encryption.enabled=true` de Cilium si el kernel lo soporta)
+- [x] **1.2.2** Añadir validación post-instalación: `cilium status --wait`
+- [x] **1.2.3** Mantener la lógica de detección de WireGuard (ahora como `--set encryption.enabled=true` de Cilium si el kernel lo soporta)
 
 ### 1.3 — Instalar Gateway API CRDs
 

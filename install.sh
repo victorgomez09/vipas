@@ -177,6 +177,93 @@ install_cilium() {
     fi
 }
 
+# ── Install Gateway API CRDs ────────────────────────────────────
+install_gateway_api_crds() {
+    info "Installing Gateway API CRDs"
+    # prefer pinned version if available
+    if [ -f "./deploy/versions.env" ]; then
+        . ./deploy/versions.env
+    fi
+    GATEWAY_API_URL="https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
+    info "Applying Gateway API CRDs: ${GATEWAY_API_URL}"
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    if ! k3s kubectl apply -f "${GATEWAY_API_URL}" >/dev/null 2>&1; then
+        warn "Failed to apply Gateway API CRDs (check network)."
+    else
+        ok "Gateway API CRDs applied"
+    fi
+}
+
+
+# ── Install Envoy Gateway via Helm ──────────────────────────────
+install_envoy_gateway() {
+    info "Installing Envoy Gateway"
+    if [ -f "./deploy/versions.env" ]; then
+        . ./deploy/versions.env
+    fi
+    install_helm
+    helm registry login docker.io >/dev/null 2>&1 || true
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+      --version ${ENVOY_GATEWAY_VERSION} \
+      -n envoy-gateway-system --create-namespace \
+      --wait --timeout 5m >/dev/null 2>&1 || warn "Envoy Gateway helm install returned non-zero"
+    ok "Envoy Gateway install invoked"
+}
+
+
+# ── Apply Gateway manifests (GatewayClass + Gateway) ────────────
+apply_gateway_manifests() {
+    info "Applying Gateway manifests"
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    k3s kubectl create ns gateway-system >/dev/null 2>&1 || true
+    k3s kubectl apply -f deploy/manifests/gatewayclass.yaml >/dev/null 2>&1 || warn "Failed to apply gatewayclass.yaml"
+    k3s kubectl apply -f deploy/manifests/gateway.yaml >/dev/null 2>&1 || warn "Failed to apply gateway.yaml"
+
+    info "Waiting for Gateway to become Accepted and Programmed"
+    for i in $(seq 1 60); do
+        ACC=$(k3s kubectl -n gateway-system get gateway vipas-gateway -o jsonpath='{.status.conditions[?(@.type=="Accepted")].status}' 2>/dev/null || echo "")
+        PRG=$(k3s kubectl -n gateway-system get gateway vipas-gateway -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null || echo "")
+        if [ "$ACC" = "True" ] && [ "$PRG" = "True" ]; then
+            ok "Gateway accepted and programmed"
+            return
+        fi
+        sleep 2
+    done
+    warn "Gateway did not reach Accepted/Programmed in time"
+}
+
+
+# ── Install cert-manager via Helm and create staging issuer ─────
+install_cert_manager() {
+    info "Installing cert-manager"
+    if [ -f "./deploy/versions.env" ]; then
+        . ./deploy/versions.env
+    fi
+    install_helm
+    helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1 || true
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    helm upgrade --install cert-manager jetstack/cert-manager \
+      -n cert-manager --create-namespace \
+      --version ${CERT_MANAGER_VERSION} \
+      --wait --timeout 5m \
+      --set installCRDs=true >/dev/null 2>&1 || warn "cert-manager helm install returned non-zero"
+
+    # Wait for cert-manager deployment
+    if ! k3s kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s >/dev/null 2>&1; then
+        warn "cert-manager deployment rollout timed out"
+    else
+        ok "cert-manager deployed"
+    fi
+
+    # Create staging ClusterIssuer by default (admin may switch to prod later)
+    if [ -f deploy/manifests/clusterissuer-staging.yaml ]; then
+        k3s kubectl apply -f deploy/manifests/clusterissuer-staging.yaml >/dev/null 2>&1 || warn "Failed to apply clusterissuer-staging.yaml"
+        ok "ClusterIssuer 'letsencrypt-staging' applied (email: admin@example.com)"
+    fi
+}
+
 # Traefik is no longer managed by the installer. TLS and ingress
 # are handled by cert-manager + Envoy Gateway after Cilium is installed.
 
@@ -342,6 +429,10 @@ main() {
     install_docker
     install_k3s
     install_cilium
+    install_gateway_api_crds
+    install_envoy_gateway
+    apply_gateway_manifests
+    install_cert_manager
     generate_secrets
     deploy
     summary

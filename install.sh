@@ -98,6 +98,85 @@ install_k3s() {
     ok "K3s running"
 }
 
+# ── Install Helm (if missing) ───────────────────────────────────
+install_helm() {
+    if command -v helm >/dev/null 2>&1; then
+        ok "Helm already installed"
+        return
+    fi
+
+    info "Installing Helm client..."
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash >/dev/null 2>&1 || \
+        fail "Failed to install helm"
+    ok "Helm installed"
+}
+
+# ── Install Cilium via Helm (production-ready defaults) ──────────
+install_cilium() {
+    if k3s kubectl -n kube-system get daemonset cilium >/dev/null 2>&1; then
+        ok "Cilium already installed in cluster"
+        return
+    fi
+
+    install_helm
+
+    . "$ENV_FILE" 2>/dev/null || true
+
+    # Derive API server address for Cilium to talk to the apiserver
+    K8S_SERVICE_HOST="${K8S_SERVICE_HOST:-${SERVER_IP:-127.0.0.1}}"
+    K8S_SERVICE_PORT="${K8S_SERVICE_PORT:-6443}"
+
+    # Detect WireGuard support (kernel/module present)
+    ENCRYPTION=false
+    if command -v modprobe >/dev/null 2>&1 && modprobe --dry-run wireguard >/dev/null 2>&1; then
+        ENCRYPTION=true
+        ok "WireGuard appears supported — enabling Cilium encryption"
+    else
+        warn "WireGuard not detected — Cilium encryption will remain disabled"
+    fi
+
+    # Add Cilium Helm repo and update
+    info "Adding Cilium Helm repo"
+    helm repo add cilium https://helm.cilium.io >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1 || true
+
+    # Pin a tested Cilium version for production (update as needed)
+    CILIUM_HELM_VERSION="v1.14.0"
+
+    info "Installing Cilium (this may take a few minutes)..."
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+    helm upgrade --install cilium cilium/cilium \
+      --namespace kube-system \
+      --create-namespace \
+      --version ${CILIUM_HELM_VERSION} \
+      --wait \
+      --timeout 10m \
+      --set kubeProxyReplacement=strict \
+      --set k8sServiceHost=${K8S_SERVICE_HOST} \
+      --set k8sServicePort=${K8S_SERVICE_PORT} \
+      --set hubble.relay.enabled=true \
+      --set hubble.ui.enabled=true \
+      --set encryption.enabled=${ENCRYPTION} >/dev/null 2>&1 || warn "Helm install/upgrade returned non-zero (check logs)"
+
+    # Validation: prefer `cilium status --wait` if cilium CLI is present
+    if command -v cilium >/dev/null 2>&1; then
+        info "Waiting for Cilium components via cilium CLI..."
+        if ! cilium status --wait 120s >/dev/null 2>&1; then
+            warn "cilium status reported problems — check: cilium status"
+        else
+            ok "Cilium components healthy"
+        fi
+    else
+        info "Waiting for Cilium pods to be ready via kubectl..."
+        if ! k3s kubectl -n kube-system wait --for=condition=Available deployment/cilium-operator --timeout=300s >/dev/null 2>&1; then
+            warn "Timed out waiting for Cilium operator — check: k3s kubectl -n kube-system get pods"
+        else
+            ok "Cilium operator available"
+        fi
+    fi
+}
+
 # Traefik is no longer managed by the installer. TLS and ingress
 # are handled by cert-manager + Envoy Gateway after Cilium is installed.
 
@@ -262,6 +341,7 @@ main() {
     preflight
     install_docker
     install_k3s
+    install_cilium
     generate_secrets
     deploy
     summary

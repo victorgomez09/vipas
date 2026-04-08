@@ -242,6 +242,6 @@ export function useCleanupStaleReplicaSets() {
 export function useCleanupCompletedJobs() {
   return useCleanupMutation("completed-jobs");
 }
-export function useCleanupOrphanIngresses() {
-  return useCleanupMutation("orphan-ingresses");
+export function useCleanupOrphanRoutes() {
+  return useCleanupMutation("orphan-routes");
 }

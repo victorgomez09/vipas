@@ -94,15 +94,15 @@ func (s *DomainService) Create(ctx context.Context, appID uuid.UUID, input Creat
 		return nil, err
 	}
 
-	if err := s.orch.CreateIngress(ctx, domain, app); err != nil {
-		// Rollback DB record if Ingress creation fails
+	if err := s.orch.CreateHTTPRoute(ctx, domain, app); err != nil {
+		// Rollback DB record if route creation fails
 		_ = s.store.Domains().Delete(ctx, domain.ID)
-		return nil, fmt.Errorf("create ingress failed: %w", err)
+		return nil, fmt.Errorf("create route failed: %w", err)
 	}
 
-	// Sync initial ingress status
-	if status, sErr := s.orch.GetIngressStatus(ctx, domain, app); sErr == nil {
-		domain.IngressReady = status.Ready
+	// Sync initial route status
+	if status, sErr := s.orch.GetHTTPRouteStatus(ctx, domain, app); sErr == nil {
+		domain.RouteReady = status.Ready
 		_ = s.store.Domains().Update(ctx, domain)
 	}
 
@@ -127,8 +127,8 @@ func (s *DomainService) GenerateTraefikDomain(ctx context.Context, appID uuid.UU
 	existing, _ := s.store.Domains().ListByApp(ctx, appID)
 	for _, d := range existing {
 		if strings.HasSuffix(d.Host, "."+baseDomain) {
-			// Ensure Ingress exists (may have been cleaned up)
-			_ = s.orch.CreateIngress(ctx, &d, app)
+			// Ensure HTTPRoute exists (may have been cleaned up)
+			_ = s.orch.CreateHTTPRoute(ctx, &d, app)
 			return &d, nil
 		}
 	}
@@ -176,14 +176,14 @@ func (s *DomainService) GenerateTraefikDomain(ctx context.Context, appID uuid.UU
 		return nil, err
 	}
 
-	if err := s.orch.CreateIngress(ctx, domain, app); err != nil {
+	if err := s.orch.CreateHTTPRoute(ctx, domain, app); err != nil {
 		_ = s.store.Domains().Delete(ctx, domain.ID)
-		return nil, fmt.Errorf("create ingress failed: %w", err)
+		return nil, fmt.Errorf("create route failed: %w", err)
 	}
 
-	// Sync ingress status and cert secret
-	if status, sErr := s.orch.GetIngressStatus(ctx, domain, app); sErr == nil {
-		domain.IngressReady = status.Ready
+	// Sync route status and cert secret
+	if status, sErr := s.orch.GetHTTPRouteStatus(ctx, domain, app); sErr == nil {
+		domain.RouteReady = status.Ready
 	}
 	_ = s.store.Domains().Update(ctx, domain)
 
@@ -228,8 +228,8 @@ func (s *DomainService) Update(ctx context.Context, id uuid.UUID, host *string, 
 	}
 
 	if hostChanged {
-		// Order: update DB first (uniqueness check) → create new ingress → delete old ingress.
-		// DB-first prevents creating a K8s ingress for a host that's already taken.
+		// Order: update DB first (uniqueness check) → create new route → delete old route.
+		// DB-first prevents creating a K8s route for a host that's already taken.
 
 		// Step 1: Update DB (partial unique index enforces no duplicate active hosts)
 		if err := s.store.Domains().Update(ctx, domain); err != nil {
@@ -239,41 +239,41 @@ func (s *DomainService) Update(ctx context.Context, id uuid.UUID, host *string, 
 			return nil, err
 		}
 
-		// Step 2: Create new ingress
-		if err := s.orch.CreateIngress(ctx, domain, app); err != nil {
+		// Step 2: Create new HTTPRoute
+		if err := s.orch.CreateHTTPRoute(ctx, domain, app); err != nil {
 			// Rollback DB: restore all changed fields
 			domain.Host = oldHost
 			domain.ForceHTTPS = oldForceHTTPS
 			if rbErr := s.store.Domains().Update(ctx, domain); rbErr != nil {
-				s.logger.Error("CRITICAL: failed to rollback domain after ingress creation failure — DB may be inconsistent",
+				s.logger.Error("CRITICAL: failed to rollback domain after route creation failure — DB may be inconsistent",
 					slog.String("domain_id", domain.ID.String()),
 					slog.String("stuck_host", *host),
 					slog.String("original_host", oldHost),
 					slog.Any("rollback_error", rbErr),
 				)
-				return nil, fmt.Errorf("ingress creation failed and rollback failed — manual fix required for domain %s", domain.ID)
+				return nil, fmt.Errorf("route creation failed and rollback failed — manual fix required for domain %s", domain.ID)
 			}
-			return nil, fmt.Errorf("failed to create ingress for new host: %w", err)
+			return nil, fmt.Errorf("failed to create route for new host: %w", err)
 		}
 
-		// Step 3: Delete old ingress (safe — DB + new ingress already committed)
+		// Step 3: Delete old route (safe — DB + new route already committed)
 		// Try current naming scheme first, then legacy (pre-hash truncated) name
-		oldIngressName := s.orch.IngressName(app, oldHost)
-		if err := s.orch.DeleteIngressByName(ctx, app, oldIngressName); err != nil {
+		oldIngressName := s.orch.HTTPRouteName(app, oldHost)
+		if err := s.orch.DeleteHTTPRouteByName(ctx, app, oldIngressName); err != nil {
 			s.logger.Warn("failed to delete old ingress by current name",
 				slog.String("old_host", oldHost), slog.Any("error", err))
 		}
-		legacyName := s.orch.LegacyIngressName(app, oldHost)
+		legacyName := s.orch.LegacyRouteName(app, oldHost)
 		if legacyName != oldIngressName {
-			if err := s.orch.DeleteIngressByName(ctx, app, legacyName); err != nil {
-				s.logger.Warn("failed to delete legacy ingress",
+			if err := s.orch.DeleteHTTPRouteByName(ctx, app, legacyName); err != nil {
+				s.logger.Warn("failed to delete legacy route",
 					slog.String("old_host", oldHost), slog.Any("error", err))
 			}
 		}
 
-		// Sync ingress status
-		if status, sErr := s.orch.GetIngressStatus(ctx, domain, app); sErr == nil {
-			domain.IngressReady = status.Ready
+		// Sync route status
+		if status, sErr := s.orch.GetHTTPRouteStatus(ctx, domain, app); sErr == nil {
+			domain.RouteReady = status.Ready
 			_ = s.store.Domains().Update(ctx, domain)
 		}
 	} else {
@@ -285,9 +285,9 @@ func (s *DomainService) Update(ctx context.Context, id uuid.UUID, host *string, 
 			return nil, err
 		}
 		// Just update in-place
-		if err := s.orch.UpdateIngress(ctx, domain, app); err != nil {
-			s.logger.Error("failed to update ingress", slog.Any("error", err))
-			return nil, fmt.Errorf("domain saved, but ingress not updated: %w", err)
+		if err := s.orch.UpdateHTTPRoute(ctx, domain, app); err != nil {
+			s.logger.Error("failed to update route", slog.Any("error", err))
+			return nil, fmt.Errorf("domain saved, but route not updated: %w", err)
 		}
 	}
 
@@ -301,7 +301,7 @@ func (s *DomainService) ListByApp(ctx context.Context, appID uuid.UUID) ([]model
 		return nil, err
 	}
 
-	// Sync live ingress/cert status from K8s
+	// Sync live route/cert status from K8s
 	app, appErr := s.store.Applications().GetByID(ctx, appID)
 	if appErr != nil {
 		return domains, nil // return stale data if app lookup fails
@@ -309,21 +309,14 @@ func (s *DomainService) ListByApp(ctx context.Context, appID uuid.UUID) ([]model
 	for i := range domains {
 		changed := false
 
-		// Check ingress ready
-		status, sErr := s.orch.GetIngressStatus(ctx, &domains[i], app)
-		if sErr == nil && status.Ready != domains[i].IngressReady {
-			domains[i].IngressReady = status.Ready
+		// Check route ready
+		status, sErr := s.orch.GetHTTPRouteStatus(ctx, &domains[i], app)
+		if sErr == nil && status.Ready != domains[i].RouteReady {
+			domains[i].RouteReady = status.Ready
 			changed = true
 		}
-
-		// Migrate CertSecret to traefik-acme (Traefik manages certs, not K8s Secrets)
-		if domains[i].TLS && domains[i].CertSecret != "traefik-acme" {
-			domains[i].CertSecret = "traefik-acme"
-			changed = true
-		}
-
 		// Check cert expiry — only update if actually changed
-		if domains[i].TLS && domains[i].CertSecret != "" {
+		if domains[i].TLS {
 			expiry, cErr := s.orch.GetCertExpiry(ctx, &domains[i], app)
 			if cErr == nil && expiry != nil {
 				// Only mark changed if expiry is new or different
@@ -348,9 +341,9 @@ func (s *DomainService) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	if err := s.orch.DeleteIngress(ctx, domain); err != nil {
-		s.logger.Error("failed to delete ingress", slog.Any("error", err))
-		return fmt.Errorf("failed to remove ingress from cluster: %w — domain not deleted", err)
+	if err := s.orch.DeleteHTTPRoute(ctx, domain); err != nil {
+		s.logger.Error("failed to delete httproute", slog.Any("error", err))
+		return fmt.Errorf("failed to remove route from cluster: %w — domain not deleted", err)
 	}
 
 	return s.store.Domains().Delete(ctx, id)

@@ -20,7 +20,7 @@ import type { ClusterTopology as TopoData } from "@/types/api";
 // ── Theme ───────────────────────────────────────────────────────
 
 const TYPE_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  ingress: { icon: Globe, color: "#ec4899", label: "Ingress" },
+  route: { icon: Globe, color: "#ec4899", label: "Route" },
   service: { icon: Network, color: "#f59e0b", label: "Service" },
   deployment: { icon: Box, color: "#3b82f6", label: "Deployment" },
   pod: { icon: Container, color: "#22c55e", label: "Pod" },
@@ -235,29 +235,29 @@ function buildGraph(topo: TopoData): { nodes: Node[]; edges: Edge[] } {
     }
   });
 
-  // Ingresses
-  topo.ingresses?.forEach((ing, i) => {
-    const id = `ing-${i}`;
+  // Routes
+  topo.routes?.forEach((r, i) => {
+    const id = `route-${i}`;
     rawNodes.push({
       id,
       type: "topo",
       position: { x: 0, y: 0 },
       data: {
-        type: "ingress",
-        label: ing.host.length > 30 ? `${ing.host.slice(0, 28)}...` : ing.host,
-        sublabel: `→ ${ing.service}`,
+        type: "route",
+        label: r.host.length > 30 ? `${r.host.slice(0, 28)}...` : r.host,
+        sublabel: `→ ${r.service}`,
         status: "active",
       },
     });
 
-    // Ingress → Service
-    if (ing.service) {
+    // Route → Service
+    if (r.service) {
       edges.push(
         makeEdge(
-          `e-ing-svc-${i}`,
+          `e-route-svc-${i}`,
           id,
-          `svc-${ing.namespace}-${ing.service}`,
-          TYPE_META.ingress.color,
+          `svc-${r.namespace}-${r.service}`,
+          TYPE_META.route.color,
         ),
       );
     }
@@ -309,7 +309,7 @@ function TopologyInner({ data }: { data: TopoData }) {
         <Background gap={16} size={1} className="opacity-30" />
         <Panel position="top-left">
           <div className="flex items-center gap-3 rounded-md border bg-card/90 px-3 py-1.5 text-[10px] shadow-sm backdrop-blur">
-            {(["ingress", "service", "deployment", "pod", "node"] as const).map((type) => {
+            {(["route", "service", "deployment", "pod", "node"] as const).map((type) => {
               const m = TYPE_META[type];
               const Icon = m.icon;
               return (

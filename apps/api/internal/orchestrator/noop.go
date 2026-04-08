@@ -198,40 +198,6 @@ func (n *NoopOrchestrator) DisableExternalAccess(ctx context.Context, db *model.
 	return nil
 }
 
-func (n *NoopOrchestrator) CreateIngress(ctx context.Context, domain *model.Domain, app *model.Application) error {
-	n.logger.Info("[noop] create ingress", slog.String("host", domain.Host))
-	return nil
-}
-
-func (n *NoopOrchestrator) UpdateIngress(ctx context.Context, domain *model.Domain, app *model.Application) error {
-	return nil
-}
-
-func (n *NoopOrchestrator) DeleteIngress(ctx context.Context, domain *model.Domain) error {
-	return nil
-}
-
-func (n *NoopOrchestrator) DeleteIngressByName(ctx context.Context, app *model.Application, name string) error {
-	return nil
-}
-
-func (n *NoopOrchestrator) IngressName(app *model.Application, host string) string {
-	return "noop"
-}
-
-func (n *NoopOrchestrator) LegacyIngressName(app *model.Application, host string) string {
-	return "noop"
-}
-
-func (n *NoopOrchestrator) GetIngressStatus(ctx context.Context, domain *model.Domain, app *model.Application) (*IngressStatus, error) {
-	return &IngressStatus{Ready: true}, nil
-}
-
-func (n *NoopOrchestrator) GetCertExpiry(ctx context.Context, domain *model.Domain, app *model.Application) (*time.Time, error) {
-	expiry := time.Now().Add(60 * 24 * time.Hour)
-	return &expiry, nil
-}
-
 func (n *NoopOrchestrator) CreateVolume(ctx context.Context, opts VolumeOpts) (string, error) {
 	return "noop-pvc", nil
 }
@@ -554,36 +520,68 @@ func (n *NoopOrchestrator) ExpandVolume(ctx context.Context, name, namespace, ne
 
 // ── Panel Ingress ───────────────────────────────────────────────
 
-func (n *NoopOrchestrator) EnsurePanelIngress(ctx context.Context, domain, httpsEmail string) error {
-	n.logger.Info("[noop] ensure panel ingress", slog.String("domain", domain), slog.String("email", httpsEmail))
+// legacy panel ingress functions removed
+
+// ── GatewayManager (HTTPRoute) compatibility ─────────────────────
+
+func (n *NoopOrchestrator) EnsureGateway(ctx context.Context) error {
+	n.logger.Info("[noop] ensure gateway")
 	return nil
 }
 
-func (n *NoopOrchestrator) DeletePanelIngress(ctx context.Context) error {
-	n.logger.Info("[noop] delete panel ingress")
+func (n *NoopOrchestrator) CreateHTTPRoute(ctx context.Context, domain *model.Domain, app *model.Application) error {
+	n.logger.Info("[noop] create httproute", slog.String("host", domain.Host))
 	return nil
 }
 
-// ── TraefikManager ──────────────────────────────────────────────
-
-func (n *NoopOrchestrator) GetTraefikConfig(ctx context.Context) (string, error) {
-	n.logger.Info("[noop] get traefik config")
-	return "# noop traefik config\nentryPoints:\n  web:\n    address: \":80\"\n  websecure:\n    address: \":443\"\n", nil
-}
-
-func (n *NoopOrchestrator) UpdateTraefikConfig(ctx context.Context, yaml string) error {
-	n.logger.Info("[noop] update traefik config")
+func (n *NoopOrchestrator) UpdateHTTPRoute(ctx context.Context, domain *model.Domain, app *model.Application) error {
+	n.logger.Info("[noop] update httproute", slog.String("host", domain.Host))
 	return nil
 }
 
-func (n *NoopOrchestrator) RestartTraefik(ctx context.Context) error {
-	n.logger.Info("[noop] restart traefik")
+func (n *NoopOrchestrator) DeleteHTTPRoute(ctx context.Context, domain *model.Domain) error {
+	n.logger.Info("[noop] delete httproute", slog.String("host", domain.Host))
 	return nil
 }
 
-func (n *NoopOrchestrator) GetTraefikStatus(ctx context.Context) (*TraefikStatus, error) {
-	return &TraefikStatus{Ready: true, PodName: "traefik-noop", Age: "0s"}, nil
+func (n *NoopOrchestrator) DeleteHTTPRouteByName(ctx context.Context, app *model.Application, name string) error {
+	n.logger.Info("[noop] delete httproute by name", slog.String("name", name))
+	return nil
 }
+
+func (n *NoopOrchestrator) HTTPRouteName(app *model.Application, host string) string {
+	return "noop-httproute"
+}
+
+func (n *NoopOrchestrator) LegacyRouteName(app *model.Application, host string) string {
+	return "noop-httproute-legacy"
+}
+
+func (n *NoopOrchestrator) GetHTTPRouteStatus(ctx context.Context, domain *model.Domain, app *model.Application) (*RouteStatus, error) {
+	return &RouteStatus{Ready: true}, nil
+}
+
+func (n *NoopOrchestrator) GetCertExpiry(ctx context.Context, domain *model.Domain, app *model.Application) (*time.Time, error) {
+	expiry := time.Now().Add(60 * 24 * time.Hour)
+	return &expiry, nil
+}
+
+func (n *NoopOrchestrator) EnsurePanelHTTPRoute(ctx context.Context, domain, httpsEmail string) error {
+	n.logger.Info("[noop] ensure panel httproute", slog.String("domain", domain), slog.String("email", httpsEmail))
+	return nil
+}
+
+func (n *NoopOrchestrator) DeletePanelHTTPRoute(ctx context.Context) error {
+	n.logger.Info("[noop] delete panel httproute")
+	return nil
+}
+
+func (n *NoopOrchestrator) SyncHTTPRoutePorts(ctx context.Context, app *model.Application) error {
+	n.logger.Info("[noop] sync httproute ports", slog.String("app", app.Name))
+	return nil
+}
+
+// Traefik-specific handlers removed; Gateway API methods implemented elsewhere.
 
 // ── HelmInspector ───────────────────────────────────────────────
 
@@ -660,14 +658,14 @@ func (n *NoopOrchestrator) CleanupCompletedJobs(ctx context.Context) (*CleanupRe
 	return &CleanupResult{Deleted: 1, Message: "Deleted 1 completed jobs"}, nil
 }
 
-func (n *NoopOrchestrator) GetOrphanIngresses(ctx context.Context, validHosts map[string]bool, _ map[string]string) ([]string, error) {
-	n.logger.Info("[noop] get orphan ingresses")
-	return []string{"default/orphan-ingress-1"}, nil
+func (n *NoopOrchestrator) GetOrphanRoutes(ctx context.Context, validHosts map[string]bool, _ map[string]string) ([]string, error) {
+	n.logger.Info("[noop] get orphan routes")
+	return []string{"default/orphan-route-1"}, nil
 }
 
-func (n *NoopOrchestrator) CleanupOrphanIngresses(ctx context.Context, validHosts map[string]bool, _ map[string]string) (*CleanupResult, error) {
-	n.logger.Info("[noop] cleanup orphan ingresses")
-	return &CleanupResult{Deleted: 1, Message: "Deleted 1 orphan ingresses"}, nil
+func (n *NoopOrchestrator) CleanupOrphanRoutes(ctx context.Context, validHosts map[string]bool, _ map[string]string) (*CleanupResult, error) {
+	n.logger.Info("[noop] cleanup orphan routes")
+	return &CleanupResult{Deleted: 1, Message: "Deleted 1 orphan routes"}, nil
 }
 
 type noopTerminal struct {

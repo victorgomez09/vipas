@@ -139,21 +139,21 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 	return nil
 }
 
-// applyPanelDomain creates or removes the Traefik IngressRoute for the panel.
+// applyPanelDomain creates or removes the panel HTTPRoute.
 func (s *SettingService) applyPanelDomain(ctx context.Context, domain string) error {
 	if domain == "" {
-		return s.orch.DeletePanelIngress(ctx)
+		return s.orch.DeletePanelHTTPRoute(ctx)
 	}
 	httpsEmail, _ := s.store.Settings().Get(ctx, model.SettingHTTPSEmail)
-	return s.orch.EnsurePanelIngress(ctx, domain, httpsEmail)
+	return s.orch.EnsurePanelHTTPRoute(ctx, domain, httpsEmail)
 }
 
-// applyHTTPSEmail updates the Traefik ACME certificate resolver email.
+// applyHTTPSEmail updates HTTPS issuer settings and re-applies panel route if configured.
 func (s *SettingService) applyHTTPSEmail(ctx context.Context, email string) error {
-	// Also re-apply panel ingress if a domain is configured, so TLS picks up the email
+	// Also re-apply panel HTTPRoute if a domain is configured, so TLS picks up the email
 	panelDomain, _ := s.store.Settings().Get(ctx, model.SettingPanelDomain)
 	if panelDomain != "" {
-		return s.orch.EnsurePanelIngress(ctx, panelDomain, email)
+		return s.orch.EnsurePanelHTTPRoute(ctx, panelDomain, email)
 	}
 	return nil
 }

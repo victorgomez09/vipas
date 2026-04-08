@@ -106,8 +106,8 @@ export function useAppDomains(appId: string) {
     refetchInterval: (query) => {
       const domains = query.state.data;
       if (!domains) return 5_000;
-      // Poll faster while any domain has pending ingress
-      return domains.some((d) => !d.ingress_ready) ? 10_000 : 60_000;
+      // Poll faster while any domain has pending route
+      return domains.some((d) => !d.route_ready) ? 10_000 : 60_000;
     },
   });
 }

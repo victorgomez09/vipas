@@ -227,10 +227,7 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.GET("/cluster/topology", cluster.GetTopology)
 			protected.GET("/cluster/node-pools", cluster.GetNodePools)
 			protected.PUT("/cluster/nodes/:name/pool", cluster.SetNodePool)
-			protected.GET("/cluster/traefik-config", cluster.GetTraefikConfig)
-			protected.PUT("/cluster/traefik-config", cluster.UpdateTraefikConfig)
-			protected.POST("/cluster/traefik-restart", cluster.RestartTraefik)
-			protected.GET("/cluster/traefik-status", cluster.GetTraefikStatus)
+			// Traefik management endpoints removed (migrating to Gateway API)
 			protected.GET("/cluster/helm-releases", cluster.GetHelmReleases)
 			protected.GET("/cluster/daemonsets", cluster.GetDaemonSets)
 			protected.DELETE("/cluster/pvcs/:namespace/:name", cluster.DeletePVC)
@@ -241,7 +238,9 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.POST("/cluster/cleanup/completed-pods", cluster.CleanupCompletedPods)
 			protected.POST("/cluster/cleanup/stale-replicasets", cluster.CleanupStaleReplicaSets)
 			protected.POST("/cluster/cleanup/completed-jobs", cluster.CleanupCompletedJobs)
-			protected.POST("/cluster/cleanup/orphan-ingresses", cluster.CleanupOrphanIngresses)
+			protected.POST("/cluster/cleanup/orphan-routes", cluster.CleanupOrphanRoutes)
+			protected.GET("/cluster/gateway/status", cluster.GetGatewayStatus)
+			protected.GET("/cluster/gateway/routes", cluster.ListGatewayRoutes)
 
 			// Monitoring
 			monitoring := v1.NewMonitoringHandler(deps.Services.Metrics)

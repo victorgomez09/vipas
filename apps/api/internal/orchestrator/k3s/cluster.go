@@ -10,6 +10,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	"github.com/victorgomez09/vipas/apps/api/internal/orchestrator"
 )
@@ -631,23 +634,49 @@ func (o *Orchestrator) GetClusterTopology(ctx context.Context) (*orchestrator.Cl
 		}
 	}
 
-	// Ingresses (vipas-managed)
-	ingList, err := o.client.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/managed-by=vipas",
-	})
-	if err == nil {
-		for _, ing := range ingList.Items {
-			for _, rule := range ing.Spec.Rules {
+	// Routes (vipas-managed) — list HTTPRoute resources via dynamic client
+	dyn, derr := dynamic.NewForConfig(o.config)
+	if derr == nil {
+		gvr := schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+		nsList, _ := o.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		for _, ns := range nsList.Items {
+			list, lerr := dyn.Resource(gvr).Namespace(ns.Name).List(ctx, metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=vipas"})
+			if lerr != nil {
+				continue
+			}
+			for _, item := range list.Items {
 				svcName := ""
-				if rule.HTTP != nil && len(rule.HTTP.Paths) > 0 {
-					svcName = rule.HTTP.Paths[0].Backend.Service.Name
+				// Try to extract backend service name from spec.rules[*].backendRefs[*].name or backendRef.service.name
+				if rules, ok, _ := unstructured.NestedSlice(item.Object, "spec", "rules"); ok {
+					for _, r := range rules {
+						if rm, rok := r.(map[string]interface{}); rok {
+							if brs, brok := rm["backendRefs"].([]interface{}); brok && len(brs) > 0 {
+								if br0, ok0 := brs[0].(map[string]interface{}); ok0 {
+									if name, okn := br0["name"].(string); okn {
+										svcName = name
+									}
+									if backendRef, okbr := br0["backendRef"].(map[string]interface{}); okbr {
+										if svcMap, oksvc := backendRef["service"].(map[string]interface{}); oksvc {
+											if svc, okn := svcMap["name"].(string); okn {
+												svcName = svc
+											}
+										}
+									}
+								}
+							}
+						}
+					}
 				}
-				topo.Ingresses = append(topo.Ingresses, orchestrator.TopologyIngress{
-					Name:      ing.Name,
-					Namespace: ing.Namespace,
-					Host:      rule.Host,
+				host := ""
+				if hosts, ok, _ := unstructured.NestedStringSlice(item.Object, "spec", "hostnames"); ok && len(hosts) > 0 {
+					host = hosts[0]
+				}
+				topo.Routes = append(topo.Routes, orchestrator.TopologyRoute{
+					Name:      item.GetName(),
+					Namespace: ns.Name,
+					Host:      host,
 					Service:   svcName,
-					AppID:     ing.Labels["vipas/app-id"],
+					AppID:     item.GetLabels()["vipas/app-id"],
 				})
 			}
 		}

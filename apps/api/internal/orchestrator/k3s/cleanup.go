@@ -8,8 +8,10 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	"github.com/victorgomez09/vipas/apps/api/internal/orchestrator"
 )
@@ -130,8 +132,8 @@ func (o *Orchestrator) GetCleanupStats(ctx context.Context) (*orchestrator.Clean
 	if stats.UnboundPVCNames == nil {
 		stats.UnboundPVCNames = []string{}
 	}
-	if stats.OrphanIngressNames == nil {
-		stats.OrphanIngressNames = []string{}
+	if stats.OrphanRouteNames == nil {
+		stats.OrphanRouteNames = []string{}
 	}
 
 	return stats, nil
@@ -340,81 +342,99 @@ func jobCompletionTime(j *batchv1.Job) *time.Time {
 	return nil
 }
 
-func (o *Orchestrator) GetOrphanIngresses(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error) {
-	return o.findOrphanIngresses(ctx, validHosts, systemIngresses)
+func (o *Orchestrator) GetOrphanRoutes(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error) {
+	return o.findOrphanRoutes(ctx, validHosts, systemIngresses)
 }
 
-func (o *Orchestrator) CleanupOrphanIngresses(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) (*orchestrator.CleanupResult, error) {
-	orphans, err := o.findOrphanIngresses(ctx, validHosts, systemIngresses)
+func (o *Orchestrator) CleanupOrphanRoutes(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) (*orchestrator.CleanupResult, error) {
+	orphans, err := o.findOrphanRoutes(ctx, validHosts, systemIngresses)
 	if err != nil {
 		return nil, err
 	}
 
 	deleted := 0
 	failed := 0
+	// Delete HTTPRoute resources corresponding to orphan keys
 	for _, key := range orphans {
-		// key format: "namespace/name"
 		parts := splitNS(key)
-		o.logger.Info("cleanup: deleting orphan ingress", slog.String("ingress", key))
-		if err := o.client.NetworkingV1().Ingresses(parts[0]).Delete(ctx, parts[1], metav1.DeleteOptions{}); err != nil {
-			o.logger.Warn("cleanup: failed to delete orphan ingress", slog.String("ingress", key), slog.String("error", err.Error()))
+		o.logger.Info("cleanup: deleting orphan httproute", slog.String("httproute", key))
+		// Use dynamic client to remove HTTPRoute
+		dyn, derr := dynamic.NewForConfig(o.config)
+		if derr != nil {
+			o.logger.Warn("cleanup: dynamic client error", slog.Any("error", derr))
+			failed++
+			continue
+		}
+		gvr := schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+		if err := dyn.Resource(gvr).Namespace(parts[0]).Delete(ctx, parts[1], metav1.DeleteOptions{}); err != nil {
+			o.logger.Warn("cleanup: failed to delete orphan httproute", slog.String("httproute", key), slog.String("error", err.Error()))
 			failed++
 		} else {
 			deleted++
 		}
 	}
 
-	msg := fmt.Sprintf("Deleted %d orphan ingresses", deleted)
+	msg := fmt.Sprintf("Deleted %d orphan routes", deleted)
 	if failed > 0 {
 		msg += fmt.Sprintf(" (%d failed)", failed)
 	}
 	return &orchestrator.CleanupResult{Deleted: deleted, Message: msg}, nil
 }
 
-func (o *Orchestrator) findOrphanIngresses(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error) {
-	var allIngresses []networkingv1.Ingress
+func (o *Orchestrator) findOrphanRoutes(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error) {
+	var orphans []string
 
-	// List vipas-managed ingresses across all namespaces
+	// List vipas-managed HTTPRoutes across all namespaces using dynamic client
+	dyn, err := dynamic.NewForConfig(o.config)
+	if err != nil {
+		return nil, fmt.Errorf("create dynamic client: %w", err)
+	}
+	gvr := schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+
 	nsList, err := o.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list namespaces: %w", err)
 	}
 	for _, ns := range nsList.Items {
-		ingresses, err := o.client.NetworkingV1().Ingresses(ns.Name).List(ctx, metav1.ListOptions{
-			LabelSelector: "app.kubernetes.io/managed-by=vipas",
-		})
-		if err != nil {
+		list, lerr := dyn.Resource(gvr).Namespace(ns.Name).List(ctx, metav1.ListOptions{LabelSelector: "app.kubernetes.io/managed-by=vipas"})
+		if lerr != nil {
 			continue
 		}
-		allIngresses = append(allIngresses, ingresses.Items...)
-	}
+		for _, item := range list.Items {
+			key := ns.Name + "/" + item.GetName()
+			isOrphan := false
 
-	var orphans []string
-	for _, ing := range allIngresses {
-		key := ing.Namespace + "/" + ing.Name
-		isOrphan := false
-
-		// System ingresses (e.g. panel) are validated by resource identity:
-		// their host must match the currently configured expected host.
-		if expectedHost, ok := systemIngresses[key]; ok {
-			for _, rule := range ing.Spec.Rules {
-				if rule.Host != expectedHost {
-					isOrphan = true
-					break
+			// Extract hostnames from .spec.hostnames
+			if hosts, ok, _ := unstructured.NestedStringSlice(item.Object, "spec", "hostnames"); ok {
+				if expectedHost, sysOK := systemIngresses[key]; sysOK {
+					// For system routes, ensure at least one host matches expected
+					match := false
+					for _, h := range hosts {
+						if h == expectedHost {
+							match = true
+							break
+						}
+					}
+					if !match {
+						isOrphan = true
+					}
+				} else {
+					// App routes validated against global host set
+					for _, h := range hosts {
+						if !validHosts[h] {
+							isOrphan = true
+							break
+						}
+					}
 				}
+			} else {
+				// No hostnames — treat as orphan
+				isOrphan = true
 			}
-		} else {
-			// App ingresses are validated against the global valid hosts set.
-			for _, rule := range ing.Spec.Rules {
-				if !validHosts[rule.Host] {
-					isOrphan = true
-					break
-				}
-			}
-		}
 
-		if isOrphan {
-			orphans = append(orphans, key)
+			if isOrphan {
+				orphans = append(orphans, key)
+			}
 		}
 	}
 	return orphans, nil

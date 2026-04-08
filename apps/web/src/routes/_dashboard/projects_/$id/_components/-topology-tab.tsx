@@ -125,7 +125,7 @@ export function TopologyTab({
 
         <FlowArrow />
 
-        {/* Ingress / Domains */}
+        {/* Routes / Domains */}
         <div className="flex-1">
           <FlowNode icon={Globe} title={`Domains (${domains.length})`}>
             {domains.length === 0 ? (
@@ -144,7 +144,7 @@ export function TopologyTab({
                       {d.host}
                     </a>
                     <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${d.ingress_ready ? "bg-green-500" : "bg-yellow-500"}`}
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${d.route_ready ? "bg-green-500" : "bg-yellow-500"}`}
                     />
                   </div>
                 ))}

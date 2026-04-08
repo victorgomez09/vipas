@@ -59,22 +59,22 @@
 
 ### 1.3 — Instalar Gateway API CRDs
 
-- [ ] **1.3.1** Añadir a `install.sh`:
+- [x] **1.3.1** Añadir a `install.sh`:
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
   ```
-- [ ] **1.3.2** Pinear la versión de Gateway API en `deploy/versions.env`
+- [x] **1.3.2** Pinear la versión de Gateway API en `deploy/versions.env`
 
 ### 1.4 — Instalar Envoy Gateway
 
-- [ ] **1.4.1** Añadir a `install.sh`:
+- [x] **1.4.1** Añadir a `install.sh`:
   ```bash
   helm install eg oci://docker.io/envoyproxy/gateway-helm \
     --version v1.3.0 \
     -n envoy-gateway-system \
     --create-namespace
   ```
-- [ ] **1.4.2** Crear el `GatewayClass` de Envoy en `deploy/manifests/gatewayclass.yaml`:
+- [x] **1.4.2** Crear el `GatewayClass` de Envoy en `deploy/manifests/gatewayclass.yaml`:
   ```yaml
   apiVersion: gateway.networking.k8s.io/v1
   kind: GatewayClass
@@ -83,7 +83,7 @@
   spec:
     controllerName: gateway.envoyproxy.io/gatewayclass-controller
   ```
-- [ ] **1.4.3** Crear el `Gateway` central `vipas-gateway` en `deploy/manifests/gateway.yaml`:
+- [x] **1.4.3** Crear el `Gateway` central `vipas-gateway` en `deploy/manifests/gateway.yaml`:
   ```yaml
   apiVersion: gateway.networking.k8s.io/v1
   kind: Gateway
@@ -109,27 +109,27 @@
           namespaces:
             from: All
   ```
-- [ ] **1.4.4** Añadir validación: esperar a que el Gateway tenga `Accepted: True` y `Programmed: True`
+- [x] **1.4.4** Añadir validación: esperar a que el Gateway tenga `Accepted: True` y `Programmed: True`
 
 ### 1.5 — Instalar cert-manager
 
-- [ ] **1.5.1** Añadir a `install.sh`:
+- [x] **1.5.1** Añadir a `install.sh`:
   ```bash
   helm install cert-manager jetstack/cert-manager \
     -n cert-manager --create-namespace \
     --set crds.enabled=true
   ```
-- [ ] **1.5.2** Crear `ClusterIssuer` para Let's Encrypt staging en `deploy/manifests/clusterissuer-staging.yaml`
-- [ ] **1.5.3** Crear `ClusterIssuer` para Let's Encrypt producción en `deploy/manifests/clusterissuer-prod.yaml`
-- [ ] **1.5.4** En `install.sh`, crear el issuer staging por defecto; el admin cambia a prod desde el panel cuando tenga dominio real
-- [ ] **1.5.5** Para dominios `sslip.io`/`nip.io` (dev sin dominio real): cert-manager no emite cert — el HTTPRoute se crea sin TLS, comportamiento idéntico al actual `isDevDomain()`
+- [x] **1.5.2** Crear `ClusterIssuer` para Let's Encrypt staging en `deploy/manifests/clusterissuer-staging.yaml`
+- [x] **1.5.3** Crear `ClusterIssuer` para Let's Encrypt producción en `deploy/manifests/clusterissuer-prod.yaml`
+- [x] **1.5.4** En `install.sh`, crear el issuer staging por defecto; el admin cambia a prod desde el panel cuando tenga dominio real
+- [x] **1.5.5** Para dominios `sslip.io`/`nip.io` (dev sin dominio real): cert-manager no emite cert — el HTTPRoute se crea sin TLS, comportamiento idéntico al actual `isDevDomain()`
 
 ### 1.6 — Validar stack base
 
-- [ ] **1.6.1** `cilium status` — todos los componentes OK
-- [ ] **1.6.2** `kubectl get gateway -n gateway-system` — `ACCEPTED: True`
-- [ ] **1.6.3** Desplegar una app de prueba con un `HTTPRoute`, verificar acceso HTTP
-- [ ] **1.6.4** En cluster con dominio real: verificar que cert-manager emite certificado TLS
+- [x] **1.6.1** `cilium status` — todos los componentes OK
+- [x] **1.6.2** `kubectl get gateway -n gateway-system` — `ACCEPTED: True`
+- [x] **1.6.3** Desplegar una app de prueba con un `HTTPRoute`, verificar acceso HTTP
+- [x] **1.6.4** En cluster con dominio real: verificar que cert-manager emite certificado TLS
 
 ---
 
@@ -139,7 +139,7 @@
 
 ### 2.1 — Interfaz del orquestador (`orchestrator.go`)
 
-- [ ] **2.1.1** Reemplazar `IngressManager` por `GatewayManager`:
+- [x] **2.1.1** Reemplazar `IngressManager` por `GatewayManager`:
   ```go
   type GatewayManager interface {
       EnsureGateway(ctx context.Context, ns, name string) error
@@ -154,17 +154,17 @@
       HTTPRouteName(app *model.Application, host string) string
   }
   ```
-- [ ] **2.1.2** Eliminar `TraefikManager` de la interfaz `Orchestrator`
-- [ ] **2.1.3** Reemplazar `IngressManager` por `GatewayManager` en la interfaz `Orchestrator`
-- [ ] **2.1.4** Actualizar `noop.go` con implementaciones vacías de los nuevos métodos
+- [x] **2.1.2** Eliminar `TraefikManager` de la interfaz `Orchestrator`
+- [x] **2.1.3** Reemplazar `IngressManager` por `GatewayManager` en la interfaz `Orchestrator`
+- [x] **2.1.4** Actualizar `noop.go` con implementaciones vacías de los nuevos métodos
 
 ### 2.2 — Nueva implementación (`httproute.go`)
 
-- [ ] **2.2.1** Añadir dependencia en `go.mod`:
+- [x]  **2.2.1** Añadir dependencia en `go.mod`:
   ```bash
   go get sigs.k8s.io/gateway-api@v1.2.0
   ```
-- [ ] **2.2.2** Crear `apps/api/internal/orchestrator/k3s/httproute.go`:
+ - [x] **2.2.2** Crear `apps/api/internal/orchestrator/k3s/httproute.go`:
   - [ ] `CreateHTTPRoute()`:
     - Si `isDevDomain(domain.Host)`: crear `HTTPRoute` solo con listener HTTP (sin TLS)
     - Si dominio real: crear `HTTPRoute` HTTPS + annotation `cert-manager.io/cluster-issuer` + `HTTPRequestRedirectFilter` para forzar HTTPS
@@ -178,7 +178,7 @@
   - [ ] `GetCertExpiry()` — lee el Secret de cert-manager del namespace de la app
   - [ ] `EnsurePanelHTTPRoute()` — equivalente al actual `EnsurePanelIngress`, apunta al Service `vipas`
 
-- [ ] **2.2.3** Crear `apps/api/internal/orchestrator/k3s/gateway.go`:
+ - [x] **2.2.3** Crear `apps/api/internal/orchestrator/k3s/gateway.go`:
   - [ ] `EnsureGateway()` — crea/actualiza el `GatewayClass` y el `Gateway` central si no existen (idempotente)
 
 ### 2.3 — Eliminar código Traefik
@@ -202,14 +202,14 @@
 
 ### 2.5 — Capa de servicio
 
-- [ ] **2.5.1** Actualizar `domain_service.go`:
+ - [x] **2.5.1** Actualizar `domain_service.go`:
   - `CreateDomain()` → `orch.CreateHTTPRoute()`
   - `UpdateDomain()` → `orch.UpdateHTTPRoute()`
   - `DeleteDomain()` → `orch.DeleteHTTPRoute()`
   - `GetDomainStatus()` → `orch.GetHTTPRouteStatus()`
   - Mantener la lógica `isDevDomain()` — el HTTPRoute simplemente no tendrá TLS
-- [ ] **2.5.2** Actualizar `deploy_service.go`: `SyncIngressPorts()` → `SyncHTTPRoutePorts()`
-- [ ] **2.5.3** Actualizar `setting_service.go`:
+ - [x] **2.5.2** Actualizar `deploy_service.go`: `SyncIngressPorts()` → `SyncHTTPRoutePorts()`
+ - [x] **2.5.3** Actualizar `setting_service.go`:
   - `EnsurePanelIngress()` → `EnsurePanelHTTPRoute()`
   - Eliminar llamadas a `GetTraefikConfig`, `UpdateTraefikConfig`, `RestartTraefik`
   - Añadir gestión del `SettingCertIssuer` (staging vs prod)
@@ -218,8 +218,8 @@
 
 - [ ] **2.6.1** Listar y revisar todos los handlers en `apps/api/internal/api/v1/` que referencien Traefik o Ingress
 - [ ] **2.6.2** Eliminar endpoints de Traefik (`GET/PUT /api/v1/settings/traefik`)
-- [ ] **2.6.3** Añadir `GET /api/v1/gateway/status` — estado del `Gateway` y listeners
-- [ ] **2.6.4** Añadir `GET /api/v1/gateway/routes` — lista de `HTTPRoutes` activos con su estado
+ - [x] **2.6.3** Añadir `GET /api/v1/gateway/status` — estado del `Gateway` y listeners
+ - [x] **2.6.4** Añadir `GET /api/v1/gateway/routes` — lista de `HTTPRoutes` activos con su estado
 
 ### 2.7 — Verificación
 

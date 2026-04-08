@@ -35,8 +35,8 @@ function DomainStatusBadges({ domain }: { domain: Domain }) {
     </Badge>
   );
 
-  // Ingress status
-  const ingress = domain.ingress_ready ? (
+  // Route status
+  const route = domain.route_ready ? (
     <Badge variant="outline" className="text-xs text-green-500">
       <Check className="mr-1 h-2.5 w-2.5" />
       Active
@@ -83,7 +83,7 @@ function DomainStatusBadges({ domain }: { domain: Domain }) {
         );
       }
     } else if (
-      domain.ingress_ready &&
+      domain.route_ready &&
       !domain.host.match(/\.(sslip\.io|nip\.io|traefik\.me|localhost|local|test)$/)
     ) {
       cert = (
@@ -98,7 +98,7 @@ function DomainStatusBadges({ domain }: { domain: Domain }) {
   return (
     <div className="flex items-center gap-1.5">
       {proto}
-      {ingress}
+      {route}
       {cert}
     </div>
   );

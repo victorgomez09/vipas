@@ -231,7 +231,7 @@ export interface Domain {
   auto_cert: boolean;
   force_https: boolean;
   cert_expiry?: string;
-  ingress_ready: boolean;
+  route_ready: boolean;
 }
 
 // ── Databases ──────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ export interface ClusterTopology {
   deployments: TopologyDeployment[];
   pods: TopologyPod[];
   services: TopologyService[];
-  ingresses: TopologyIngress[];
+  routes: TopologyRoute[];
 }
 
 export interface TopologyNode {
@@ -399,7 +399,7 @@ export interface TopologyService {
   app_id?: string;
 }
 
-export interface TopologyIngress {
+export interface TopologyRoute {
   name: string;
   namespace: string;
   host: string;
@@ -570,8 +570,8 @@ export interface CleanupStats {
   completed_job_names: string[];
   unbound_pvcs: number;
   unbound_pvc_names: string[];
-  orphan_ingresses: number;
-  orphan_ingress_names: string[];
+  orphan_routes: number;
+  orphan_route_names: string[];
 }
 
 export interface CleanupResult {

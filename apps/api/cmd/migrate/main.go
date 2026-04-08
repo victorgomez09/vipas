@@ -103,6 +103,14 @@ func main() {
 		}
 		fmt.Printf("Created migration: %s\n", mf.Name)
 
+	case "ingress-to-httproute":
+		// Migration helper stub: convert existing networking.k8s.io/Ingress
+		// resources managed by vipas into Gateway API HTTPRoute resources.
+		// Full implementation requires cluster access and careful checks
+		// (Accepted: True, cert-manager, zero-downtime). For now this is
+		// a safe no-op placeholder to be implemented later.
+		fmt.Println("ingress-to-httproute: not implemented yet. See ROADMAP for steps.")
+
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		os.Exit(1)

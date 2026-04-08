@@ -63,7 +63,7 @@ import {
   useCleanupCompletedPods,
   useCleanupEvictedPods,
   useCleanupFailedPods,
-  useCleanupOrphanIngresses,
+  useCleanupOrphanRoutes,
   useCleanupStaleReplicaSets,
   useCleanupStats,
   useClusterMetrics,
@@ -1575,7 +1575,7 @@ function ClusterHealthTab() {
   const cleanCompleted = useCleanupCompletedPods();
   const cleanStaleRS = useCleanupStaleReplicaSets();
   const cleanJobs = useCleanupCompletedJobs();
-  const cleanOrphanIngresses = useCleanupOrphanIngresses();
+  const cleanOrphanIngresses = useCleanupOrphanRoutes();
 
   if (isLoading || !stats) {
     return (
@@ -1590,7 +1590,7 @@ function ClusterHealthTab() {
     stats.failed_pods +
     stats.completed_pods +
     stats.stale_replicasets +
-    stats.orphan_ingresses +
+    stats.orphan_routes +
     stats.completed_jobs +
     stats.unbound_pvcs;
 
@@ -1699,14 +1699,14 @@ function ClusterHealthTab() {
       <Card>
         <CardHeader className="pb-0">
           <CardTitle className="text-sm">Networking</CardTitle>
-          <CardDescription className="text-xs">Orphan ingress resources</CardDescription>
+          <CardDescription className="text-xs">Orphan route resources</CardDescription>
         </CardHeader>
         <CardContent>
           <CleanupRow
-            label="Orphan Ingresses"
-            description="Ingresses without a matching domain record in the database"
-            count={stats.orphan_ingresses}
-            names={stats.orphan_ingress_names}
+            label="Orphan Routes"
+            description="Routes without a matching domain record in the database"
+            count={stats.orphan_routes}
+            names={stats.orphan_route_names}
             variant="red"
             mutation={cleanOrphanIngresses}
           />

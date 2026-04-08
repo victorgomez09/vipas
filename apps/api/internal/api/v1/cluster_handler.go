@@ -132,12 +132,7 @@ func (h *ClusterHandler) SetNodePool(c *gin.Context) {
 }
 
 func (h *ClusterHandler) GetTraefikConfig(c *gin.Context) {
-	yaml, err := h.orch.GetTraefikConfig(c.Request.Context())
-	if err != nil {
-		httputil.RespondError(c, err)
-		return
-	}
-	httputil.RespondOK(c, gin.H{"yaml": yaml})
+	httputil.RespondError(c, apierr.ErrNotFound)
 }
 
 func (h *ClusterHandler) UpdateTraefikConfig(c *gin.Context) {
@@ -148,11 +143,7 @@ func (h *ClusterHandler) UpdateTraefikConfig(c *gin.Context) {
 		httputil.RespondError(c, apierr.ErrBadRequest.WithDetail(err.Error()))
 		return
 	}
-	if err := h.orch.UpdateTraefikConfig(c.Request.Context(), body.YAML); err != nil {
-		httputil.RespondError(c, err)
-		return
-	}
-	httputil.RespondOK(c, gin.H{"message": "traefik config updated"})
+	httputil.RespondError(c, apierr.ErrNotFound)
 }
 
 func (h *ClusterHandler) GetHelmReleases(c *gin.Context) {
@@ -195,16 +186,16 @@ func (h *ClusterHandler) GetCleanupStats(c *gin.Context) {
 		return
 	}
 
-	// Enrich with orphan ingress detection (requires DB access)
+	// Enrich with orphan route detection (requires DB access)
 	validHosts := h.getValidDomainHosts(ctx)
-	systemIngresses := h.getSystemIngresses(ctx)
-	orphans, orphanErr := h.orch.GetOrphanIngresses(ctx, validHosts, systemIngresses)
+	systemRoutes := h.getSystemRoutes(ctx)
+	orphans, orphanErr := h.orch.GetOrphanRoutes(ctx, validHosts, systemRoutes)
 	if orphanErr == nil && orphans != nil {
-		stats.OrphanIngresses = len(orphans)
-		stats.OrphanIngressNames = orphans
+		stats.OrphanRoutes = len(orphans)
+		stats.OrphanRouteNames = orphans
 	}
-	if stats.OrphanIngressNames == nil {
-		stats.OrphanIngressNames = []string{}
+	if stats.OrphanRouteNames == nil {
+		stats.OrphanRouteNames = []string{}
 	}
 
 	httputil.RespondOK(c, stats)
@@ -223,11 +214,11 @@ func (h *ClusterHandler) getValidDomainHosts(ctx context.Context) map[string]boo
 	return hosts
 }
 
-// getSystemIngresses returns system-managed ingresses keyed by "namespace/name"
+// getSystemRoutes returns system-managed routes keyed by "namespace/name"
 // with their currently expected host. These are validated by resource identity
-// (not the global host list) so that an app ingress sharing the same host is
+// (not the global host list) so that an app route sharing the same host is
 // not accidentally exempt from orphan cleanup.
-func (h *ClusterHandler) getSystemIngresses(ctx context.Context) map[string]string {
+func (h *ClusterHandler) getSystemRoutes(ctx context.Context) map[string]string {
 	si := make(map[string]string)
 	if panelDomain, _ := h.store.Settings().Get(ctx, model.SettingPanelDomain); panelDomain != "" {
 		si["vipas/vipas-panel"] = panelDomain
@@ -281,11 +272,11 @@ func (h *ClusterHandler) CleanupCompletedJobs(c *gin.Context) {
 	httputil.RespondOK(c, result)
 }
 
-func (h *ClusterHandler) CleanupOrphanIngresses(c *gin.Context) {
+func (h *ClusterHandler) CleanupOrphanRoutes(c *gin.Context) {
 	ctx := c.Request.Context()
 	validHosts := h.getValidDomainHosts(ctx)
-	systemIngresses := h.getSystemIngresses(ctx)
-	result, err := h.orch.CleanupOrphanIngresses(ctx, validHosts, systemIngresses)
+	systemRoutes := h.getSystemRoutes(ctx)
+	result, err := h.orch.CleanupOrphanRoutes(ctx, validHosts, systemRoutes)
 	if err != nil {
 		httputil.RespondError(c, err)
 		return
@@ -315,18 +306,40 @@ func (h *ClusterHandler) ExpandPVC(c *gin.Context) {
 }
 
 func (h *ClusterHandler) RestartTraefik(c *gin.Context) {
-	if err := h.orch.RestartTraefik(c.Request.Context()); err != nil {
-		httputil.RespondError(c, apierr.ErrBadRequest.WithDetail(err.Error()))
-		return
-	}
-	httputil.RespondOK(c, gin.H{"message": "Traefik restarting"})
+	httputil.RespondError(c, apierr.ErrNotFound)
 }
 
 func (h *ClusterHandler) GetTraefikStatus(c *gin.Context) {
-	status, err := h.orch.GetTraefikStatus(c.Request.Context())
+	httputil.RespondError(c, apierr.ErrNotFound)
+}
+
+// GetGatewayStatus ensures the central Gateway exists and reports basic health info.
+func (h *ClusterHandler) GetGatewayStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	if err := h.orch.EnsureGateway(ctx); err != nil {
+		httputil.RespondError(c, err)
+		return
+	}
+	nodes, err := h.orch.GetNodes(ctx)
 	if err != nil {
 		httputil.RespondError(c, err)
 		return
 	}
-	httputil.RespondOK(c, status)
+	httputil.RespondOK(c, gin.H{"gateway": "ready", "nodes": len(nodes)})
+}
+
+// ListGatewayRoutes returns known domain routes and their HTTPRoute status.
+func (h *ClusterHandler) ListGatewayRoutes(c *gin.Context) {
+	ctx := c.Request.Context()
+	apps, _, _ := h.store.Applications().ListAll(ctx, store.ListParams{Page: 1, PerPage: 1000}, store.AppListFilter{})
+	var out []map[string]interface{}
+	for _, app := range apps {
+		domains, _ := h.store.Domains().ListByApp(ctx, app.ID)
+		for _, d := range domains {
+			status, _ := h.orch.GetHTTPRouteStatus(ctx, &d, &app)
+			m := map[string]interface{}{"app_id": app.ID, "app": app.Name, "host": d.Host, "status": status}
+			out = append(out, m)
+		}
+	}
+	httputil.RespondList(c, out)
 }

@@ -61,7 +61,7 @@ function TraefikPage() {
     <div>
       <PageHeader
         title="Traefik"
-        description="Ingress controller configuration."
+        description="Gateway controller configuration."
         actions={
           <div className="flex items-center gap-2">
             {status && (

@@ -141,7 +141,7 @@ func main() {
 		logger.Error("failed to init settings", slog.Any("error", err))
 	}
 
-	// Reconcile infrastructure (re-apply panel ingress, etc.)
+	// Reconcile infrastructure (re-apply panel route, etc.)
 	services.Setting.ReconcileInfra(context.Background())
 
 	// Router

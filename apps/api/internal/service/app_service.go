@@ -553,11 +553,11 @@ func (s *AppService) Delete(ctx context.Context, id uuid.UUID) error {
 		s.logger.Error("failed to delete app from orchestrator", slog.Any("error", err), slog.String("app", app.Name))
 	}
 
-	// Delete associated Ingress resources
+	// Delete associated HTTPRoute resources
 	domains, _ := s.store.Domains().ListByApp(ctx, id)
 	for _, d := range domains {
-		if err := s.orch.DeleteIngress(ctx, &d); err != nil {
-			s.logger.Warn("failed to delete ingress", slog.String("domain", d.Host), slog.Any("error", err))
+		if err := s.orch.DeleteHTTPRoute(ctx, &d); err != nil {
+			s.logger.Warn("failed to delete httproute", slog.String("domain", d.Host), slog.Any("error", err))
 		}
 	}
 

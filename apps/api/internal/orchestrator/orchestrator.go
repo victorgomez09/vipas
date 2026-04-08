@@ -14,7 +14,7 @@ import (
 type Orchestrator interface {
 	AppManager
 	DatabaseManager
-	IngressManager
+	GatewayManager
 	StorageManager
 	ClusterInspector
 	LogStreamer
@@ -26,26 +26,10 @@ type Orchestrator interface {
 	ConfigMapManager
 	ResourceQuotaManager
 	NetworkPolicyManager
-	TraefikManager
 	HelmInspector
 	DaemonSetInspector
 	ServiceAccountManager
 	CleanupInspector
-}
-
-// TraefikManager handles Traefik configuration.
-type TraefikManager interface {
-	GetTraefikConfig(ctx context.Context) (string, error)
-	UpdateTraefikConfig(ctx context.Context, yaml string) error
-	RestartTraefik(ctx context.Context) error
-	GetTraefikStatus(ctx context.Context) (*TraefikStatus, error)
-}
-
-type TraefikStatus struct {
-	Ready    bool   `json:"ready"`
-	PodName  string `json:"pod_name"`
-	Restarts int32  `json:"restarts"`
-	Age      string `json:"age"`
 }
 
 // HelmInspector provides information about Helm releases.
@@ -97,17 +81,22 @@ type DatabaseManager interface {
 }
 
 // IngressManager handles domain routing and TLS.
-type IngressManager interface {
-	CreateIngress(ctx context.Context, domain *model.Domain, app *model.Application) error
-	UpdateIngress(ctx context.Context, domain *model.Domain, app *model.Application) error
-	DeleteIngress(ctx context.Context, domain *model.Domain) error
-	DeleteIngressByName(ctx context.Context, app *model.Application, name string) error
-	IngressName(app *model.Application, host string) string
-	LegacyIngressName(app *model.Application, host string) string
-	GetIngressStatus(ctx context.Context, domain *model.Domain, app *model.Application) (*IngressStatus, error)
+// Note: IngressManager removed — use GatewayManager/HTTPRoute instead.
+
+// GatewayManager provides gateway/HTTPRoute operations (new API replacing IngressManager).
+type GatewayManager interface {
+	EnsureGateway(ctx context.Context) error
+	CreateHTTPRoute(ctx context.Context, domain *model.Domain, app *model.Application) error
+	UpdateHTTPRoute(ctx context.Context, domain *model.Domain, app *model.Application) error
+	DeleteHTTPRoute(ctx context.Context, domain *model.Domain) error
+	DeleteHTTPRouteByName(ctx context.Context, app *model.Application, name string) error
+	HTTPRouteName(app *model.Application, host string) string
+	LegacyRouteName(app *model.Application, host string) string
+	GetHTTPRouteStatus(ctx context.Context, domain *model.Domain, app *model.Application) (*RouteStatus, error)
 	GetCertExpiry(ctx context.Context, domain *model.Domain, app *model.Application) (*time.Time, error)
-	EnsurePanelIngress(ctx context.Context, domain, httpsEmail string) error
-	DeletePanelIngress(ctx context.Context) error
+	EnsurePanelHTTPRoute(ctx context.Context, domain, httpsEmail string) error
+	DeletePanelHTTPRoute(ctx context.Context) error
+	SyncHTTPRoutePorts(ctx context.Context, app *model.Application) error
 }
 
 // StorageManager handles persistent volumes.
@@ -177,7 +166,7 @@ type ClusterTopology struct {
 	Deployments []TopologyDeployment `json:"deployments"`
 	Pods        []TopologyPod        `json:"pods"`
 	Services    []TopologyService    `json:"services"`
-	Ingresses   []TopologyIngress    `json:"ingresses"`
+	Routes      []TopologyRoute      `json:"routes"`
 }
 
 type TopologyNode struct {
@@ -214,7 +203,7 @@ type TopologyService struct {
 	AppID     string `json:"app_id,omitempty"`
 }
 
-type TopologyIngress struct {
+type TopologyRoute struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Host      string `json:"host"`
@@ -304,10 +293,10 @@ type ContainerStatus struct {
 	Reason       string `json:"reason"` // CrashLoopBackOff, etc.
 }
 
-type IngressStatus struct {
+type RouteStatus struct {
 	Ready      bool   `json:"ready"`
 	Message    string `json:"message,omitempty"`
-	CertSecret string `json:"cert_secret,omitempty"` // TLS secret name from ingress spec
+	CertSecret string `json:"cert_secret,omitempty"` // TLS secret name from route/cert-manager
 }
 
 type NodeInfo struct {
@@ -445,29 +434,29 @@ type CleanupInspector interface {
 	CleanupCompletedPods(ctx context.Context) (*CleanupResult, error)
 	CleanupStaleReplicaSets(ctx context.Context) (*CleanupResult, error)
 	CleanupCompletedJobs(ctx context.Context) (*CleanupResult, error)
-	// GetOrphanIngresses returns vipas-managed ingresses not in the provided valid hosts set.
-	// systemIngresses maps "namespace/name" → expected host for system-managed ingresses
+	// GetOrphanRoutes returns vipas-managed HTTPRoute resources not in the provided valid hosts set.
+	// systemIngresses maps "namespace/name" → expected host for system-managed routes
 	// (e.g. the panel) that should be validated by resource identity, not the global host list.
-	GetOrphanIngresses(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error)
-	// CleanupOrphanIngresses deletes vipas-managed ingresses not in the valid hosts set.
-	CleanupOrphanIngresses(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) (*CleanupResult, error)
+	GetOrphanRoutes(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) ([]string, error)
+	// CleanupOrphanRoutes deletes vipas-managed HTTPRoute resources not in the valid hosts set.
+	CleanupOrphanRoutes(ctx context.Context, validHosts map[string]bool, systemIngresses map[string]string) (*CleanupResult, error)
 }
 
 type CleanupStats struct {
-	EvictedPods        int      `json:"evicted_pods"`
-	EvictedPodNames    []string `json:"evicted_pod_names"`
-	FailedPods         int      `json:"failed_pods"`
-	FailedPodNames     []string `json:"failed_pod_names"`
-	CompletedPods      int      `json:"completed_pods"`
-	CompletedPodNames  []string `json:"completed_pod_names"`
-	StaleReplicaSets   int      `json:"stale_replicasets"`
-	StaleRSNames       []string `json:"stale_rs_names"`
-	CompletedJobs      int      `json:"completed_jobs"`
-	CompletedJobNames  []string `json:"completed_job_names"`
-	UnboundPVCs        int      `json:"unbound_pvcs"`
-	UnboundPVCNames    []string `json:"unbound_pvc_names"`
-	OrphanIngresses    int      `json:"orphan_ingresses"`
-	OrphanIngressNames []string `json:"orphan_ingress_names"`
+	EvictedPods       int      `json:"evicted_pods"`
+	EvictedPodNames   []string `json:"evicted_pod_names"`
+	FailedPods        int      `json:"failed_pods"`
+	FailedPodNames    []string `json:"failed_pod_names"`
+	CompletedPods     int      `json:"completed_pods"`
+	CompletedPodNames []string `json:"completed_pod_names"`
+	StaleReplicaSets  int      `json:"stale_replicasets"`
+	StaleRSNames      []string `json:"stale_rs_names"`
+	CompletedJobs     int      `json:"completed_jobs"`
+	CompletedJobNames []string `json:"completed_job_names"`
+	UnboundPVCs       int      `json:"unbound_pvcs"`
+	UnboundPVCNames   []string `json:"unbound_pvc_names"`
+	OrphanRoutes      int      `json:"orphan_routes"`
+	OrphanRouteNames  []string `json:"orphan_route_names"`
 }
 
 type CleanupResult struct {

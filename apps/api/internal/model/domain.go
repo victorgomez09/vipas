@@ -18,7 +18,7 @@ type Domain struct {
 	AutoCert   bool   `bun:"auto_cert" json:"auto_cert"`
 	CertSecret string `bun:"cert_secret" json:"cert_secret,omitempty"`
 
-	ForceHTTPS   bool       `bun:"force_https" json:"force_https"`
-	CertExpiry   *time.Time `bun:"cert_expiry" json:"cert_expiry,omitempty"`
-	IngressReady bool       `bun:"ingress_ready" json:"ingress_ready"`
+	ForceHTTPS bool       `bun:"force_https" json:"force_https"`
+	CertExpiry *time.Time `bun:"cert_expiry" json:"cert_expiry,omitempty"`
+	RouteReady bool       `bun:"ingress_ready" json:"route_ready"`
 }

@@ -271,9 +271,9 @@ func (o *Orchestrator) Deploy(ctx context.Context, app *model.Application, opts 
 		return fmt.Errorf("service update failed: %w", err)
 	}
 
-	// Sync ingress backend ports if they changed
-	if err := o.SyncIngressPorts(ctx, app); err != nil {
-		return fmt.Errorf("ingress port sync failed: %w", err)
+	// Sync route backend ports if they changed
+	if err := o.SyncHTTPRoutePorts(ctx, app); err != nil {
+		return fmt.Errorf("route port sync failed: %w", err)
 	}
 
 	o.logger.Info("deployed to K3s", slog.String("name", name), slog.String("ns", ns), slog.String("image", opts.Image))

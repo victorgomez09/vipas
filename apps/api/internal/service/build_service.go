@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -63,7 +64,13 @@ func (s *BuildService) Build(ctx context.Context, app *model.Application, deploy
 			if gitToken != "" {
 				logs = strings.ReplaceAll(logs, gitToken, "[REDACTED]")
 			}
-			deploy.BuildLog = logs
+			// Format and append incremental logs so the stored build log contains the full output
+			formatted := formatBuildLogs(logs)
+			if deploy.BuildLog == "" {
+				deploy.BuildLog = formatted
+			} else {
+				deploy.BuildLog = deploy.BuildLog + formatted
+			}
 			_ = s.store.Deployments().Update(ctx, deploy)
 		},
 	}
@@ -75,11 +82,19 @@ func (s *BuildService) Build(ctx context.Context, app *model.Application, deploy
 
 	result, err := s.orch.Build(ctx, app, opts)
 	if err != nil {
-		// Save build logs from the result (even on failure, logs may be available)
+		// Save/append build logs from the result (even on failure, logs may be available)
 		if result != nil && result.Logs != "" {
-			deploy.BuildLog = result.Logs + "\n\n--- Error ---\n" + err.Error()
+			if deploy.BuildLog == "" {
+				deploy.BuildLog = result.Logs + "\n\n--- Error ---\n" + err.Error()
+			} else {
+				deploy.BuildLog = deploy.BuildLog + "\n\n" + result.Logs + "\n\n--- Error ---\n" + err.Error()
+			}
 		} else {
-			deploy.BuildLog = err.Error()
+			if deploy.BuildLog == "" {
+				deploy.BuildLog = err.Error()
+			} else {
+				deploy.BuildLog = deploy.BuildLog + "\n\n--- Error ---\n" + err.Error()
+			}
 		}
 		_ = s.store.Deployments().Update(ctx, deploy)
 		return err
@@ -91,8 +106,14 @@ func (s *BuildService) Build(ctx context.Context, app *model.Application, deploy
 		return fmt.Errorf("update app image: %w", err)
 	}
 
-	// Save build log and image on deployment
-	deploy.BuildLog = result.Logs
+	// Save build image and append any final logs returned by the orchestrator
+	if result.Logs != "" {
+		if deploy.BuildLog == "" {
+			deploy.BuildLog = result.Logs
+		} else {
+			deploy.BuildLog = deploy.BuildLog + "\n\n" + result.Logs
+		}
+	}
 	deploy.Image = result.Image
 	_ = s.store.Deployments().Update(ctx, deploy)
 
@@ -102,6 +123,58 @@ func (s *BuildService) Build(ctx context.Context, app *model.Application, deploy
 		slog.Duration("duration", result.Duration),
 	)
 	return nil
+}
+
+// formatBuildLogs applies simple heuristics to make build logs more readable
+// - ensures docker build chunk markers (e.g. "#1") begin on their own line
+// - places "Saved output to:" on its own line
+// - separates box-drawn Nixpacks banner with surrounding newlines
+// - collapses multiple blank lines
+func formatBuildLogs(in string) string {
+	if in == "" {
+		return ""
+	}
+	// normalize CRs
+	s := strings.ReplaceAll(in, "\r", "")
+
+	// Insert newline before docker chunk markers like "#1" when they are inline.
+	// Go's regexp doesn't support lookbehind, so find matches and insert newlines
+	reChunk := regexp.MustCompile(`#\d+`)
+	matches := reChunk.FindAllStringIndex(s, -1)
+	if len(matches) > 0 {
+		var b strings.Builder
+		cur := 0
+		for _, m := range matches {
+			start, end := m[0], m[1]
+			b.WriteString(s[cur:start])
+			if start > 0 && s[start-1] != '\n' {
+				b.WriteByte('\n')
+			}
+			b.WriteString(s[start:end])
+			cur = end
+		}
+		b.WriteString(s[cur:])
+		s = b.String()
+	}
+
+	// Place Saved output lines on their own line
+	s = strings.ReplaceAll(s, "Saved output to:", "\nSaved output to:")
+
+	// Ensure box characters start on a new line
+	s = strings.ReplaceAll(s, "╔", "\n╔")
+	s = strings.ReplaceAll(s, "╚", "\n╚")
+	s = strings.ReplaceAll(s, "║", "\n║")
+
+	// Collapse 3+ newlines to 2
+	reMulti := regexp.MustCompile(`\n{3,}`)
+	s = reMulti.ReplaceAllString(s, "\n\n")
+
+	// Trim leading/trailing whitespace but keep final newline
+	s = strings.TrimLeft(s, "\n")
+	if !strings.HasSuffix(s, "\n") {
+		s = s + "\n"
+	}
+	return s
 }
 
 // resolveGitToken gets a fresh token for git operations.

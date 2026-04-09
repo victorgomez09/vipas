@@ -199,12 +199,34 @@ install_envoy_gateway() {
   echo "[info] installing Envoy Gateway (waiting for rollout)"
   install_helm
   ENVOY_VERSION=${ENVOY_GATEWAY_VERSION:-v1.3.0}
-  helm registry login docker.io >/dev/null 2>&1 || true
+  # Avoid interactive prompt from 'helm registry login' by closing stdin
+  helm registry login docker.io </dev/null >/dev/null 2>&1 || true
 
-  # Use helm with --wait so the release will block until required resources are ready
-  if ! sh -c "helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version \"${ENVOY_VERSION}\" -n envoy-gateway-system --create-namespace --wait --timeout 300s"; then
-    echo "[warn] envoy gateway helm install/upgrade returned non-zero; showing release status"
-    helm -n envoy-gateway-system status eg || true
+  NS=envoy-gateway-system
+  # Ensure namespace exists
+  sh -c "${KUBECTL_CMD} create ns ${NS} --dry-run=client -o yaml | ${KUBECTL_CMD} apply -f -" >/dev/null 2>&1 || true
+
+  # Try to pull the OCI chart first (fast-fail if OCI access blocked)
+  CHARTDIR="/tmp/envoy-gateway-chart"
+  rm -rf "${CHARTDIR}" || true
+  echo "[info] attempting helm pull (OCI) as a connectivity check — this may take a few seconds"
+  if timeout 60s helm pull oci://docker.io/envoyproxy/gateway-helm --version "${ENVOY_VERSION}" --untar -d /tmp >/dev/null 2>&1; then
+    echo "[info] helm pull succeeded, installing from local chart"
+    if ! helm upgrade --install eg /tmp/gateway-helm --namespace ${NS} --wait --timeout 300s --debug; then
+      echo "[warn] helm install (local chart) failed; showing release status"
+      helm -n ${NS} status eg || true
+    fi
+  else
+    echo "[info] helm pull failed or timed out; attempting direct OCI install with debug and timeout"
+    if ! timeout 180s helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version "${ENVOY_VERSION}" -n ${NS} --create-namespace --wait --timeout 300s --debug; then
+      echo "[warn] envoy gateway helm install/upgrade failed or timed out"
+      echo "--- helm releases in namespace ---"
+      helm -n ${NS} list || true
+      echo "--- helm release status (eg) ---"
+      helm -n ${NS} status eg || true
+      echo "--- namespace events ---"
+      ${KUBECTL_CMD} -n ${NS} get events --sort-by='.lastTimestamp' | tail -n 50 || true
+    fi
   fi
 
   # wait for pods in envoy-gateway-system to be ready, with clearer diagnostics on failure
@@ -243,8 +265,37 @@ install_envoy_gateway() {
 apply_gateway_manifests() {
   echo "[info] applying Gateway manifests"
   sh -c "${KUBECTL_CMD} create ns gateway-system --dry-run=client -o yaml | ${KUBECTL_CMD} apply -f -" >/dev/null 2>&1 || true
-  sh -c "${KUBECTL_CMD} apply -f \"$ROOT_DIR/manifests/gatewayclass.yaml\"" || true
-  sh -c "${KUBECTL_CMD} apply -f \"$ROOT_DIR/manifests/gateway.yaml\"" || true
+
+  # Look for manifests in repository root or deploy/manifests
+  if [ -d "$ROOT_DIR/manifests" ]; then
+    MANIFEST_DIR="$ROOT_DIR/manifests"
+  elif [ -d "$ROOT_DIR/deploy/manifests" ]; then
+    MANIFEST_DIR="$ROOT_DIR/deploy/manifests"
+  else
+    echo "[error] no manifests directory found (tried $ROOT_DIR/manifests and $ROOT_DIR/deploy/manifests)"
+    return 1
+  fi
+
+  echo "[info] applying manifests from ${MANIFEST_DIR}"
+  # Ensure a TLS secret exists for the Gateway (self-signed for dev)
+  if ! ${KUBECTL_CMD} -n gateway-system get secret vipas-tls >/dev/null 2>&1; then
+    echo "[info] creating self-signed TLS certificate and secret gateway-system/vipas-tls"
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/vipas.key -out /tmp/vipas.crt -subj "/CN=vipas.local" >/dev/null 2>&1 || true
+    ${KUBECTL_CMD} -n gateway-system create secret tls vipas-tls --cert=/tmp/vipas.crt --key=/tmp/vipas.key >/dev/null 2>&1 || true
+  fi
+
+  # If gateway manifest exists, ensure listener TLS has certificateRefs referencing the secret
+  if [ -f "${MANIFEST_DIR}/gateway.yaml" ]; then
+    perl -0777 -pe 's/(^(\s*)tls:\n\2\s*mode:\s*Terminate\n)(\2\s*certificateRefs:\s*\[\]\n)?/$1 . sprintf("%s  certificateRefs:\n%s  - name: vipas-tls\n%s    kind: Secret\n", $2, $2, $2)/em' "${MANIFEST_DIR}/gateway.yaml" > "${MANIFEST_DIR}/gateway.yaml.tmp" || true
+    if [ -s "${MANIFEST_DIR}/gateway.yaml.tmp" ]; then
+      mv "${MANIFEST_DIR}/gateway.yaml.tmp" "${MANIFEST_DIR}/gateway.yaml" || true
+    else
+      rm -f "${MANIFEST_DIR}/gateway.yaml.tmp" || true
+    fi
+  fi
+
+  sh -c "${KUBECTL_CMD} apply -f \"${MANIFEST_DIR}/gatewayclass.yaml\"" || true
+  sh -c "${KUBECTL_CMD} apply -f \"${MANIFEST_DIR}/gateway.yaml\"" || true
 
   echo "[info] waiting for Gateway Accepted/Programmed"
   for i in $(seq 1 60); do
@@ -288,7 +339,14 @@ install_cert_manager() {
   fi
 
   # Apply staging ClusterIssuer after cert-manager is available
-  sh -c "${KUBECTL_CMD} apply -f \"$ROOT_DIR/manifests/clusterissuer-staging.yaml\"" || true
+  # try both repository locations for the ClusterIssuer manifest
+  if [ -f "$ROOT_DIR/manifests/clusterissuer-staging.yaml" ]; then
+    sh -c "${KUBECTL_CMD} apply -f \"$ROOT_DIR/manifests/clusterissuer-staging.yaml\"" || true
+  elif [ -f "$ROOT_DIR/deploy/manifests/clusterissuer-staging.yaml" ]; then
+    sh -c "${KUBECTL_CMD} apply -f \"$ROOT_DIR/deploy/manifests/clusterissuer-staging.yaml\"" || true
+  else
+    echo "[warn] clusterissuer-staging.yaml not found in manifests directories"
+  fi
 }
 
 usage() {

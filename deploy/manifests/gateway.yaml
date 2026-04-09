@@ -17,7 +17,9 @@ spec:
       protocol: HTTPS
       tls:
         mode: Terminate
-        certificateRefs: []
+        certificateRefs:
+        - name: vipas-tls
+          kind: Secret
       allowedRoutes:
         namespaces:
           from: All

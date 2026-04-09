@@ -2,10 +2,14 @@ package k3s
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -130,24 +134,76 @@ func (o *Orchestrator) Build(ctx context.Context, app *model.Application, opts o
 
 	initContainers := []corev1.Container{gitCloneContainer}
 
-	// If build type is nixpacks, add an init container to generate Dockerfile
+	// If build type is nixpacks, prefer building on the host (faster, avoids large downloads in-cluster)
 	if opts.BuildType == "nixpacks" {
-		initContainers = append(initContainers, corev1.Container{
-			Name:    "nixpacks-plan",
-			Image:   "ghcr.io/railwayapp/nixpacks:latest",
-			Command: []string{"sh", "-c"},
-			Args:    []string{"nixpacks build /workspace --out /workspace && cp /workspace/.nixpacks/Dockerfile /workspace/Dockerfile || nixpacks plan /workspace > /workspace/.nixpacks-plan.json"},
-			VolumeMounts: []corev1.VolumeMount{
-				{Name: "workspace", MountPath: "/workspace"},
-			},
-		})
-		// Override dockerfile to the generated one
-		for i, arg := range kanikoArgs {
-			if strings.HasPrefix(arg, "--dockerfile=") {
-				kanikoArgs[i] = "--dockerfile=/workspace/Dockerfile"
-				break
-			}
+		// Steps:
+		// 1. clone repo to temp dir
+		// 2. run `nixpacks build <context>` to produce .nixpacks/Dockerfile
+		// 3. tag and push image to local registry using `docker` present on host
+		// 4. return the pushed image
+
+		tmpDir, err := os.MkdirTemp("/tmp", "vipas-build-")
+		if err != nil {
+			return nil, fmt.Errorf("create tmpdir: %w", err)
 		}
+		defer os.RemoveAll(tmpDir)
+
+		// git clone
+		gitDir := filepath.Join(tmpDir, "repo")
+		if err := os.MkdirAll(gitDir, 0o755); err != nil {
+			return nil, fmt.Errorf("mkdir git dir: %w", err)
+		}
+		cloneCmd := exec.CommandContext(ctx, "git", "clone", "--branch", opts.GitBranch, "--depth", "1", opts.GitRepo, gitDir)
+		cloneOutStr, err := runCmdStream(ctx, cloneCmd, opts.OnLog)
+		if err != nil {
+			return &orchestrator.BuildResult{Logs: cloneOutStr, Duration: time.Since(start)}, fmt.Errorf("git clone failed: %w", err)
+		}
+
+		// determine build context path
+		hostContext := gitDir
+		if buildContext != "" {
+			hostContext = filepath.Join(gitDir, buildContext)
+		}
+
+		// run nixpacks build
+		nixpacksCmd := exec.CommandContext(ctx, "nixpacks", "build", hostContext, "--out", filepath.Join(tmpDir, "out"))
+		nixOutStr, err := runCmdStream(ctx, nixpacksCmd, opts.OnLog)
+		if err != nil {
+			return &orchestrator.BuildResult{Logs: nixOutStr, Duration: time.Since(start)}, fmt.Errorf("nixpacks build failed: %w", err)
+		}
+
+		// copy generated Dockerfile location
+		generatedDockerfile := filepath.Join(tmpDir, "out", ".nixpacks", "Dockerfile")
+		if _, err := os.Stat(generatedDockerfile); err != nil {
+			return &orchestrator.BuildResult{Logs: nixOutStr, Duration: time.Since(start)}, fmt.Errorf("generated Dockerfile missing: %w", err)
+		}
+
+		// Ensure .nixpacks is available in the build context so Dockerfile COPYs succeed
+		srcNixpacks := filepath.Join(tmpDir, "out", ".nixpacks")
+		dstNixpacks := filepath.Join(hostContext, ".nixpacks")
+		if err := copyDir(srcNixpacks, dstNixpacks); err != nil {
+			return &orchestrator.BuildResult{Logs: nixOutStr, Duration: time.Since(start)}, fmt.Errorf("copy .nixpacks to context: %w", err)
+		}
+
+		// build and push using docker on host
+		imageTag := pushTag
+		// docker build -f <generatedDockerfile> -t <imageTag> <hostContext>
+		buildCmd := exec.CommandContext(ctx, "docker", "build", "-f", generatedDockerfile, "-t", imageTag, hostContext)
+		buildOutStr, err := runCmdStream(ctx, buildCmd, opts.OnLog)
+		if err != nil {
+			return &orchestrator.BuildResult{Logs: buildOutStr, Duration: time.Since(start)}, fmt.Errorf("docker build failed: %w", err)
+		}
+
+		// push
+		pushCmd := exec.CommandContext(ctx, "docker", "push", imageTag)
+		pushOutStr, err := runCmdStream(ctx, pushCmd, opts.OnLog)
+		if err != nil {
+			return &orchestrator.BuildResult{Logs: pushOutStr, Duration: time.Since(start)}, fmt.Errorf("docker push failed: %w", err)
+		}
+
+		// Return build result with logs
+		combinedLogs := strings.Join([]string{cloneOutStr, nixOutStr, buildOutStr, pushOutStr}, "\n---\n")
+		return &orchestrator.BuildResult{Image: pullTag, Duration: time.Since(start), Logs: combinedLogs}, nil
 	}
 
 	// Create the build Job
@@ -256,6 +312,84 @@ func (o *Orchestrator) Build(ctx context.Context, app *model.Application, opts o
 		Duration: duration,
 		Logs:     logs,
 	}, nil
+}
+
+// copyDir recursively copies src -> dst (creates dst). Returns error on failure.
+func copyDir(src string, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		srcPath := filepath.Join(src, e.Name())
+		dstPath := filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+			continue
+		}
+		// file
+		in, err := os.Open(srcPath)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.Create(dstPath)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			out.Close()
+			return err
+		}
+		out.Close()
+	}
+	return nil
+}
+
+// runCmdStream runs cmd and streams stdout/stderr lines to onLog (if non-nil).
+// It returns the combined output and the command error (if any).
+func runCmdStream(ctx context.Context, cmd *exec.Cmd, onLog func(string)) (string, error) {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	// stream function
+	stream := func(r io.Reader) {
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			line := scanner.Text()
+			buf.WriteString(line + "\n")
+			if onLog != nil {
+				onLog(line)
+			}
+		}
+	}
+
+	// read both
+	done := make(chan struct{}, 2)
+	go func() { stream(stdout); done <- struct{}{} }()
+	go func() { stream(stderr); done <- struct{}{} }()
+	// wait for readers
+	<-done
+	<-done
+
+	err = cmd.Wait()
+	return buf.String(), err
 }
 
 func (o *Orchestrator) waitForBuildJob(ctx context.Context, namespace, jobName string, onLog orchestrator.LogCallback) (string, error) {

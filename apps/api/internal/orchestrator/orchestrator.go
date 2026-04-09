@@ -26,6 +26,7 @@ type Orchestrator interface {
 	ConfigMapManager
 	ResourceQuotaManager
 	NetworkPolicyManager
+	LoadBalancerManager
 	HelmInspector
 	DaemonSetInspector
 	ServiceAccountManager
@@ -144,6 +145,13 @@ type NetworkPolicyManager interface {
 	EnsureNetworkPolicy(ctx context.Context, namespace string, enabled bool) error
 }
 
+// LoadBalancerManager handles installation and status reporting for cluster
+// load balancer implementations like MetalLB or Cilium BGP.
+type LoadBalancerManager interface {
+	EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error
+	GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error)
+}
+
 // ClusterInspector provides cluster-wide information.
 type ClusterInspector interface {
 	GetNodes(ctx context.Context) ([]NodeInfo, error)
@@ -167,6 +175,13 @@ type ClusterTopology struct {
 	Pods        []TopologyPod        `json:"pods"`
 	Services    []TopologyService    `json:"services"`
 	Routes      []TopologyRoute      `json:"routes"`
+}
+
+// LBStatus reports basic load-balancer information.
+type LBStatus struct {
+	Type        string   `json:"type"`
+	IPPools     []string `json:"ip_pools"`
+	AssignedIPs []string `json:"assigned_ips"`
 }
 
 type TopologyNode struct {

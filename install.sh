@@ -177,6 +177,50 @@ install_cilium() {
     fi
 }
 
+
+# ── Install MetalLB (optional) ───────────────────────────────────
+install_metallb() {
+    . "$ENV_FILE" 2>/dev/null || true
+    LB_TYPE="${LB_TYPE:-}"
+    if [ "${LB_TYPE}" != "metallb" ]; then
+        info "Skipping MetalLB install (LB_TYPE=${LB_TYPE:-none})"
+        return
+    fi
+
+    info "Installing MetalLB"
+    install_helm
+    helm repo add metallb https://metallb.github.io/metallb >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1 || true
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+    # Install MetalLB via Helm (chart: metallb/metallb)
+    if ! helm upgrade --install metallb metallb/metallb \
+      -n metallb-system --create-namespace --wait --timeout 5m >/dev/null 2>&1; then
+        warn "MetalLB helm install returned non-zero (check: k3s kubectl -n metallb-system get pods)"
+    else
+        ok "MetalLB install invoked"
+    fi
+
+    # Apply the IPAddressPool + L2Advertisement manifest if METALLB_IP_POOL set
+    METALLB_IP_POOL="${METALLB_IP_POOL:-}"
+    if [ -z "$METALLB_IP_POOL" ]; then
+        warn "METALLB_IP_POOL not set — skipping IP pool creation. Set METALLB_IP_POOL in $ENV_FILE"
+        return
+    fi
+
+    info "Applying MetalLB IPAddressPool using: $METALLB_IP_POOL"
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    # Render manifest with the provided IP pool and apply
+    TMP_MANIFEST=$(mktemp)
+    sed "s|\${METALLB_IP_POOL}|${METALLB_IP_POOL}|g" deploy/manifests/metallb-ip-pool.yaml > "$TMP_MANIFEST"
+    if ! k3s kubectl apply -f "$TMP_MANIFEST" >/dev/null 2>&1; then
+        warn "Failed to apply MetalLB IP pool manifest"
+    else
+        ok "MetalLB IP pool applied"
+    fi
+    rm -f "$TMP_MANIFEST"
+}
+
 # ── Install Gateway API CRDs ────────────────────────────────────
 install_gateway_api_crds() {
     info "Installing Gateway API CRDs"
@@ -429,6 +473,7 @@ main() {
     install_docker
     install_k3s
     install_cilium
+    install_metallb
     install_gateway_api_crds
     install_envoy_gateway
     apply_gateway_manifests

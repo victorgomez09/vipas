@@ -1,0 +1,23 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: vipas-proxy
+  namespace: gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDaemonSet:
+        patch:
+          type: StrategicMergePatch
+          value:
+            spec:
+              template:
+                spec:
+                  nodeSelector:
+                    vipas/pool: gateway
+                  tolerations:
+                    - key: role
+                      value: gateway
+                      effect: NoSchedule
+                  hostNetwork: true

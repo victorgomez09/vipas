@@ -131,7 +131,7 @@ func (s *AppService) Create(ctx context.Context, input CreateAppInput) (*model.A
 
 	// Auto-generate default Traefik domain
 	if s.domainSvc != nil {
-		if domain, err := s.domainSvc.GenerateTraefikDomain(ctx, app.ID); err != nil {
+		if domain, err := s.domainSvc.GenerateDomain(ctx, app.ID); err != nil {
 			s.logger.Error("failed to auto-generate domain", slog.Any("error", err))
 		} else {
 			s.logger.Info("default domain generated", slog.String("host", domain.Host))

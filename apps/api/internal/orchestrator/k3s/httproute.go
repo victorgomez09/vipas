@@ -284,7 +284,7 @@ func (o *Orchestrator) GetCertExpiry(ctx context.Context, domain *model.Domain, 
 		}
 		for _, c := range certs {
 			// Check if cert matches domain host (CN or SAN)
-			if certMatchesHost(&c, domain.Host) {
+			if certMatchesHost(c, domain.Host) {
 				exp := c.NotAfter
 				if earliest == nil || exp.Before(*earliest) {
 					earliest = &exp

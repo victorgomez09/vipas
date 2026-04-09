@@ -68,6 +68,15 @@ install_cilium() {
   ENCRYPTION=$(detect_wireguard)
   echo "[info] wireguard support: ${ENCRYPTION}"
 
+  # Detect WSL2 / Microsoft kernels where WireGuard/IPsec is usually unavailable
+  if [ -r /proc/version ] && grep -qi microsoft /proc/version 2>/dev/null; then
+    echo "[info] detected WSL2 / Microsoft kernel — disabling WireGuard/IPsec for Cilium"
+    ENCRYPTION="false"
+  elif uname -r 2>/dev/null | grep -qi microsoft; then
+    echo "[info] detected Microsoft kernel via uname — disabling WireGuard/IPsec for Cilium"
+    ENCRYPTION="false"
+  fi
+
   # Check cluster environment: k3s, k3d, kind, codespaces
   NODE_NAMES=$(sh -c "${KUBECTL_CMD} get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {end}'" 2>/dev/null || echo "")
   IS_K3D=0
@@ -76,7 +85,7 @@ install_cilium() {
     echo "[warn] detected Codespaces environment — privileged kernel features (eBPF) may be unavailable"
   fi
 
-  CILIUM_VERSION=${CILIUM_HELM_VERSION:-v1.14.0}
+  CILIUM_VERSION=${CILIUM_HELM_VERSION:-1.14.0}
   K8S_SERVICE_HOST=${K8S_SERVICE_HOST:-127.0.0.1}
   K8S_SERVICE_PORT=${K8S_SERVICE_PORT:-6443}
 
@@ -97,17 +106,51 @@ install_cilium() {
     EXTRA_ENC_FLAG="--set encryption.enabled=${ENCRYPTION}"
   fi
 
-    echo "[info] installing Cilium Helm chart (non-blocking)"
-    helm upgrade --install cilium cilium/cilium \
+  # If encryption (WireGuard) is not available, also disable IPsec to avoid requiring ipsec secrets
+  EXTRA_IPSEC_FLAG=""
+  if [ "${ENCRYPTION}" = "false" ]; then
+    echo "[info] WireGuard not available — disabling Cilium IPsec to avoid missing secret requirements"
+    EXTRA_IPSEC_FLAG="--set ipsec.enabled=false"
+  fi
+
+    echo "[info] installing Cilium Helm chart (waiting for rollout)"
+    if ! helm upgrade --install cilium cilium/cilium \
       --namespace kube-system --create-namespace \
-      --version ${CILIUM_VERSION} \
+      --version "${CILIUM_VERSION}" \
       --set kubeProxyReplacement=strict \
-      --set k8sServiceHost=${K8S_SERVICE_HOST} \
-      --set k8sServicePort=${K8S_SERVICE_PORT} \
+      --set k8sServiceHost="${K8S_SERVICE_HOST}" \
+      --set k8sServicePort="${K8S_SERVICE_PORT}" \
       --set hubble.relay.enabled=true \
       --set hubble.ui.enabled=true \
       ${EXTRA_ENC_FLAG} \
-      ${EXTRA_REPLICAS_FLAG} || echo "[warn] helm install returned non-zero"
+      ${EXTRA_IPSEC_FLAG} \
+      ${EXTRA_REPLICAS_FLAG} \
+      --wait --timeout 600s; then
+      echo "[warn] helm install/upgrade returned non-zero; showing release status"
+      helm -n kube-system status cilium || true
+    fi
+
+    # If installation still left Cilium init containers blocked (e.g. due to ipsec secret),
+    # attempt a fallback upgrade forcing ipsec/encryption off to recover quickly.
+    DS_READY=$(sh -c "${KUBECTL_CMD} -n kube-system get ds cilium -o jsonpath='{.status.numberReady}' 2>/dev/null || echo 0")
+    DS_DESIRED=$(sh -c "${KUBECTL_CMD} -n kube-system get ds cilium -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo 0")
+    if [ "${DS_DESIRED:-0}" != "0" ] && [ "${DS_READY:-0}" -lt "${DS_DESIRED}" ]; then
+      echo "[info] Cilium daemonset not fully ready (ready=${DS_READY}/${DS_DESIRED}), applying recovery upgrade disabling IPsec/encryption"
+      helm -n kube-system upgrade --install cilium cilium/cilium --reuse-values --set ipsec.enabled=false --set encryption.enabled=false --wait --timeout 300s || true
+    fi
+
+    # As a last-resort recovery: if Cilium still isn't ready and the ipsec secret is missing,
+    # create a dummy secret so init containers that mount it can proceed, then restart pods.
+    DS_READY=$(sh -c "${KUBECTL_CMD} -n kube-system get ds cilium -o jsonpath='{.status.numberReady}' 2>/dev/null || echo 0")
+    DS_DESIRED=$(sh -c "${KUBECTL_CMD} -n kube-system get ds cilium -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo 0")
+    if [ "${DS_DESIRED:-0}" != "0" ] && [ "${DS_READY:-0}" -lt "${DS_DESIRED}" ]; then
+      if ! ${KUBECTL_CMD} -n kube-system get secret cilium-ipsec-keys >/dev/null 2>&1; then
+        echo "[info] creating fallback dummy secret kube-system/cilium-ipsec-keys"
+        ${KUBECTL_CMD} -n kube-system create secret generic cilium-ipsec-keys --from-literal=key=dummy || true
+        echo "[info] deleting Cilium pods to allow reinitialization"
+        ${KUBECTL_CMD} -n kube-system delete pod -l k8s-app=cilium || true
+      fi
+    fi
 
     echo "[info] waiting for Cilium components (timeout 600s). Showing progress every 5s..."
     MAX_ITER=$((600 / 5))
@@ -153,13 +196,18 @@ install_gateway_api_crds() {
 }
 
 install_envoy_gateway() {
-  echo "[info] installing Envoy Gateway (non-blocking)"
+  echo "[info] installing Envoy Gateway (waiting for rollout)"
   install_helm
   ENVOY_VERSION=${ENVOY_GATEWAY_VERSION:-v1.3.0}
   helm registry login docker.io >/dev/null 2>&1 || true
-  sh -c "helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version ${ENVOY_VERSION} -n envoy-gateway-system --create-namespace" || echo "[warn] envoy gateway helm install returned non-zero"
 
-  # wait for pods in envoy-gateway-system to be ready
+  # Use helm with --wait so the release will block until required resources are ready
+  if ! sh -c "helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version \"${ENVOY_VERSION}\" -n envoy-gateway-system --create-namespace --wait --timeout 300s"; then
+    echo "[warn] envoy gateway helm install/upgrade returned non-zero; showing release status"
+    helm -n envoy-gateway-system status eg || true
+  fi
+
+  # wait for pods in envoy-gateway-system to be ready, with clearer diagnostics on failure
   NS=envoy-gateway-system
   echo "[info] waiting for Envoy Gateway pods (timeout 300s)"
   MAX_ITER=$((300 / 5))
@@ -167,7 +215,7 @@ install_envoy_gateway() {
     echo "--- envoy status (attempt $i/$MAX_ITER) ---"
     sh -c "${KUBECTL_CMD} -n ${NS} get pods -o wide" || true
     TOTAL=$(sh -c "${KUBECTL_CMD} -n ${NS} get pods --no-headers 2>/dev/null | wc -l" | tr -d '[:space:]' || echo "0")
-    NOT_READY=$(sh -c "${KUBECTL_CMD} -n ${NS} get pods --no-headers 2>/dev/null | awk '{split(\$2,a,\"/\"); if(a[1] != a[2]) print \$0}' | wc -l" | tr -d '[:space:]' || echo "0")
+    NOT_READY=$(sh -c "${KUBECTL_CMD} -n ${NS} get pods --no-headers 2>/dev/null | awk '{split(\$2,a,"/"); if(a[1] != a[2]) print \$0}' | wc -l" | tr -d '[:space:]' || echo "0")
     if [ "${TOTAL}" -gt 0 ] && [ "${NOT_READY}" -eq 0 ]; then
       echo "[ok] Envoy Gateway pods ready (${TOTAL}/${TOTAL})"
       break
@@ -177,6 +225,17 @@ install_envoy_gateway() {
   if [ "$i" -eq "$MAX_ITER" ]; then
     echo "[error] Envoy Gateway pods did not become ready in time"
     sh -c "${KUBECTL_CMD} -n ${NS} get pods -o wide" || true
+    echo "--- describe non-ready pods ---"
+    # Describe and show logs for non-ready pods to aid debugging
+    for POD in $(${KUBECTL_CMD} -n ${NS} get pods --no-headers 2>/dev/null | awk '{split($2,a,"/"); if(a[1] != a[2]) print $1}'); do
+      echo "--- describe $POD ---"
+      ${KUBECTL_CMD} -n ${NS} describe pod ${POD} || true
+      echo "--- logs for $POD (all containers) ---"
+      for C in $(${KUBECTL_CMD} -n ${NS} get pod ${POD} -o jsonpath='{.spec.containers[*].name}' 2>/dev/null); do
+        echo "--- logs ${POD} -c ${C} ---"
+        ${KUBECTL_CMD} -n ${NS} logs ${POD} -c ${C} --tail=200 || true
+      done
+    done
     helm -n envoy-gateway-system status eg || true
   fi
 }

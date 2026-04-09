@@ -16,4 +16,7 @@ const (
 	SettingSetupDone   = "setup_done"   // "true" after first-time setup
 	SettingPanelDomain = "panel_domain" // domain for the Vipas panel (e.g. "panel.example.com")
 	SettingHTTPSEmail  = "https_email"  // email for Let's Encrypt ACME certificates
+	SettingCertIssuer  = "cert_issuer"  // letsencrypt-staging | letsencrypt-prod | selfsigned
+	SettingLBType      = "lb_type"      // nodeport | metallb | cilium-bgp
+	SettingLBIPPool    = "lb_ip_pool"   // CIDR or IP range for MetalLB pool
 )

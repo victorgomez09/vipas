@@ -581,6 +581,17 @@ func (n *NoopOrchestrator) SyncHTTPRoutePorts(ctx context.Context, app *model.Ap
 	return nil
 }
 
+// LoadBalancer methods (noop)
+func (n *NoopOrchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error {
+	n.logger.Info("[noop] ensure load balancer", slog.String("type", lbType), slog.String("pool", ipPool))
+	return nil
+}
+
+func (n *NoopOrchestrator) GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error) {
+	n.logger.Info("[noop] get lb status")
+	return &LBStatus{Type: "nodeport", IPPools: []string{}, AssignedIPs: []string{}}, nil
+}
+
 // Traefik-specific handlers removed; Gateway API methods implemented elsewhere.
 
 // ── HelmInspector ───────────────────────────────────────────────

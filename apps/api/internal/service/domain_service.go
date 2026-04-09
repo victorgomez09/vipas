@@ -191,6 +191,12 @@ func (s *DomainService) GenerateTraefikDomain(ctx context.Context, appID uuid.UU
 	return domain, nil
 }
 
+// GenerateDomain is a neutral name wrapper for GenerateTraefikDomain kept for
+// compatibility with code that references a non-provider-specific name.
+func (s *DomainService) GenerateDomain(ctx context.Context, appID uuid.UUID) (*model.Domain, error) {
+	return s.GenerateTraefikDomain(ctx, appID)
+}
+
 func (s *DomainService) Update(ctx context.Context, id uuid.UUID, host *string, forceHTTPS *bool) (*model.Domain, error) {
 	domain, err := s.store.Domains().GetByID(ctx, id)
 	if err != nil {

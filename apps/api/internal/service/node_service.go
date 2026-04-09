@@ -366,6 +366,18 @@ func (s *NodeService) runInitialize(node *model.ServerNode) {
 				node.K8sNodeName = n.Name
 				node.Status = model.NodeStatusReady
 				_ = s.store.ServerNodes().Update(ctx, node)
+
+				// If this node is designated as a gateway, label it so the Envoy daemonset
+				// can target it. Best-effort: ignore errors but log via broadcast.
+				if node.Role == "gateway" {
+					s.broadcast(nodeID, "Applying gateway node label: vipas/pool=gateway")
+					if err := s.orch.SetNodeLabel(ctx, n.Name, "vipas/pool", "gateway"); err != nil {
+						s.broadcast(nodeID, "Warning: failed to set node label: "+err.Error())
+					} else {
+						s.broadcast(nodeID, "Gateway node label applied")
+					}
+				}
+
 				return
 			}
 		}

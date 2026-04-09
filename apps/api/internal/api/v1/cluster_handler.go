@@ -201,6 +201,16 @@ func (h *ClusterHandler) GetCleanupStats(c *gin.Context) {
 	httputil.RespondOK(c, stats)
 }
 
+// GetLBStatus returns load balancer status (IP pools and assigned IPs).
+func (h *ClusterHandler) GetLBStatus(c *gin.Context) {
+	status, err := h.orch.GetLoadBalancerStatus(c.Request.Context())
+	if err != nil {
+		httputil.RespondError(c, err)
+		return
+	}
+	httputil.RespondOK(c, status)
+}
+
 // getValidDomainHosts returns the set of all app domain hosts in the database.
 func (h *ClusterHandler) getValidDomainHosts(ctx context.Context) map[string]bool {
 	hosts := make(map[string]bool)

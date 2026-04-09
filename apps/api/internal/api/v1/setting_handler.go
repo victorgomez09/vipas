@@ -131,9 +131,10 @@ func (h *SettingHandler) VerifyDomain(c *gin.Context) {
 		issuer = cert.Issuer.Organization[0]
 	}
 
-	if cert.Issuer.CommonName == "TRAEFIK DEFAULT CERT" {
+	// Detect self-signed certificates (issuer equals subject or cert.IsCA)
+	if cert.IsCA || cert.Issuer.CommonName == cert.Subject.CommonName {
 		result["cert"] = "self_signed"
-		result["cert_message"] = "Using Traefik default certificate. Let's Encrypt cert is being issued..."
+		result["cert_message"] = "Self-signed certificate detected. Cert-manager needs to issue a real cert."
 	} else if strings.Contains(issuer, "Let's Encrypt") {
 		result["cert"] = "valid"
 		result["cert_issuer"] = issuer

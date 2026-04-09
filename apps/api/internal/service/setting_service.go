@@ -134,6 +134,23 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 			s.logger.Warn("HTTPS email saved but not applied", slog.Any("error", err))
 			return fmt.Errorf("setting saved, but HTTPS config not applied: %w", err)
 		}
+	case model.SettingCertIssuer:
+		// Validate known issuers (best-effort) and re-apply panel route so cert-manager can pick new issuer
+		if value != "letsencrypt-staging" && value != "letsencrypt-prod" && value != "selfsigned" && value != "" {
+			s.logger.Warn("unknown cert issuer set", slog.String("value", value))
+		}
+		if err := s.applyCertIssuer(ctx, value); err != nil {
+			s.logger.Warn("cert issuer saved but not applied", slog.Any("error", err))
+			return fmt.Errorf("setting saved, but cert issuer not applied: %w", err)
+		}
+	case model.SettingLBType, model.SettingLBIPPool:
+		// Re-apply load balancer configuration (best-effort)
+		lbType, _ := s.store.Settings().Get(ctx, model.SettingLBType)
+		ipPool, _ := s.store.Settings().Get(ctx, model.SettingLBIPPool)
+		if err := s.applyLoadBalancerConfig(ctx, lbType, ipPool); err != nil {
+			s.logger.Warn("lb setting saved but not applied", slog.Any("error", err))
+			return fmt.Errorf("setting saved, but LB config not applied: %w", err)
+		}
 	}
 
 	return nil
@@ -155,6 +172,31 @@ func (s *SettingService) applyHTTPSEmail(ctx context.Context, email string) erro
 	if panelDomain != "" {
 		return s.orch.EnsurePanelHTTPRoute(ctx, panelDomain, email)
 	}
+	return nil
+}
+
+// applyCertIssuer re-applies panel HTTPRoute so that cert-manager annotations
+// or configuration pick up the selected issuer. No-op if no panel domain is set.
+func (s *SettingService) applyCertIssuer(ctx context.Context, issuer string) error {
+	panelDomain, _ := s.store.Settings().Get(ctx, model.SettingPanelDomain)
+	if panelDomain == "" {
+		return nil
+	}
+	// Re-ensure panel route; EnsurePanelHTTPRoute will use current settings stored
+	httpsEmail, _ := s.store.Settings().Get(ctx, model.SettingHTTPSEmail)
+	return s.orch.EnsurePanelHTTPRoute(ctx, panelDomain, httpsEmail)
+}
+
+// applyLoadBalancerConfig applies LB settings. For MetalLB it will create the
+// IPAddressPool and L2Advertisement via the orchestrator.
+func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ipPool string) error {
+	if lbType == "" {
+		lbType = "nodeport"
+	}
+	if lbType == "metallb" {
+		return s.orch.EnsureLoadBalancer(ctx, lbType, ipPool)
+	}
+	// For nodeport or other unsupported types, no-op
 	return nil
 }
 

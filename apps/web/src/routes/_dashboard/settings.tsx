@@ -443,6 +443,12 @@ function GeneralTab() {
             </Badge>
           </div>
           <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Gateway IP</span>
+            <Badge variant="outline" className="font-mono">
+              {settings.gateway_ip || "-"}
+            </Badge>
+          </div>
+          <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Setup Status</span>
             <Badge variant={settings.setup_done === "true" ? "success" : "warning"}>
               {settings.setup_done === "true" ? "Configured" : "Pending"}

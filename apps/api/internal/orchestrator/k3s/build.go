@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -180,6 +181,10 @@ func (o *Orchestrator) Build(ctx context.Context, app *model.Application, opts o
 
 		// Ensure .nixpacks is available in the build context so Dockerfile COPYs succeed
 		srcNixpacks := filepath.Join(tmpDir, "out", ".nixpacks")
+		// If the generated .nixpacks references a remote nixpkgs tarball, download it here
+		if err := ensureVendorTarball(srcNixpacks, opts.OnLog); err != nil {
+			return &orchestrator.BuildResult{Logs: nixOutStr, Duration: time.Since(start)}, fmt.Errorf("vendor nixpkgs: %w", err)
+		}
 		dstNixpacks := filepath.Join(hostContext, ".nixpacks")
 		if err := copyDir(srcNixpacks, dstNixpacks); err != nil {
 			return &orchestrator.BuildResult{Logs: nixOutStr, Duration: time.Since(start)}, fmt.Errorf("copy .nixpacks to context: %w", err)
@@ -194,12 +199,13 @@ func (o *Orchestrator) Build(ctx context.Context, app *model.Application, opts o
 			return &orchestrator.BuildResult{Logs: buildOutStr, Duration: time.Since(start)}, fmt.Errorf("docker build failed: %w", err)
 		}
 
-		// push
-		pushCmd := exec.CommandContext(ctx, "docker", "push", imageTag)
-		pushOutStr, err := runCmdStream(ctx, pushCmd, opts.OnLog)
+		// push (with fallback to localhost NodePort registry if cluster DNS not resolvable)
+		pushOutStr, finalTag, err := pushImageWithFallback(ctx, imageTag, opts.OnLog)
 		if err != nil {
 			return &orchestrator.BuildResult{Logs: pushOutStr, Duration: time.Since(start)}, fmt.Errorf("docker push failed: %w", err)
 		}
+		// if fallback retag was used, update imageTag for logging
+		imageTag = finalTag
 
 		// Return build result with logs
 		combinedLogs := strings.Join([]string{cloneOutStr, nixOutStr, buildOutStr, pushOutStr}, "\n---\n")
@@ -351,6 +357,74 @@ func copyDir(src string, dst string) error {
 	return nil
 }
 
+// ensureVendorTarball looks for a nixpkgs-<hash>.nix in dir and downloads
+// nixpkgs-<hash>.tar.gz into the same dir if it's missing. onLog is used
+// to stream progress messages (may be nil).
+func ensureVendorTarball(dir string, onLog func(string)) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var nixFile string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, "nixpkgs-") && strings.HasSuffix(name, ".nix") {
+			nixFile = name
+			break
+		}
+	}
+	if nixFile == "" {
+		// nothing to vendor
+		return nil
+	}
+	// extract hash
+	// nixpkgs-<hash>.nix
+	parts := strings.SplitN(nixFile, "-", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	hash := strings.TrimSuffix(parts[1], ".nix")
+	tarName := fmt.Sprintf("nixpkgs-%s.tar.gz", hash)
+	tarPath := filepath.Join(dir, tarName)
+	if _, err := os.Stat(tarPath); err == nil {
+		// already present
+		return nil
+	}
+
+	url := fmt.Sprintf("https://github.com/NixOS/nixpkgs/archive/%s.tar.gz", hash)
+	if onLog != nil {
+		onLog(fmt.Sprintf("vendor: downloading nixpkgs tarball %s", url))
+	}
+
+	// Download with http.Get
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to download %s: status %s", url, resp.Status)
+	}
+
+	out, err := os.Create(tarPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return err
+	}
+	if onLog != nil {
+		onLog(fmt.Sprintf("vendor: saved %s", tarPath))
+	}
+	return nil
+}
+
 // runCmdStream runs cmd and streams stdout/stderr lines to onLog (if non-nil).
 // It returns the combined output and the command error (if any).
 func runCmdStream(ctx context.Context, cmd *exec.Cmd, onLog func(string)) (string, error) {
@@ -390,6 +464,55 @@ func runCmdStream(ctx context.Context, cmd *exec.Cmd, onLog func(string)) (strin
 
 	err = cmd.Wait()
 	return buf.String(), err
+}
+
+// pushImageWithFallback attempts to push imageTag with `docker push`.
+// If the push fails due to DNS lookup/connectivity to the cluster registry,
+// it retags the image to use RegistryPullHost (localhost nodeport) and retries.
+// Returns combined logs, the final image tag pushed, and an error if both attempts fail.
+func pushImageWithFallback(ctx context.Context, imageTag string, onLog func(string)) (string, string, error) {
+	// Attempt primary push
+	cmd := exec.CommandContext(ctx, "docker", "push", imageTag)
+	out, err := runCmdStream(ctx, cmd, onLog)
+	if err == nil {
+		return out, imageTag, nil
+	}
+
+	// Detect common DNS/lookup/connectivity errors and try fallback.
+	// Inspect both the returned error and the combined CLI output because
+	// `err.Error()` is often just "exit status 1" while the actual message
+	// (e.g. "no such host" or "lookup ...") is printed to stderr and
+	// captured in `out`.
+	errCombined := strings.ToLower(err.Error() + " " + out)
+	if strings.Contains(errCombined, "no such host") || strings.Contains(errCombined, "lookup") || strings.Contains(errCombined, "dial tcp") {
+		// Build fallback tag replacing RegistryPushHost host with RegistryPullHost
+		// imageTag format: <host>/<repo>:<tag>
+		parts := strings.SplitN(imageTag, "/", 2)
+		if len(parts) != 2 {
+			return out + "\n" + err.Error(), imageTag, err
+		}
+		fallbackTag := fmt.Sprintf("%s/%s", RegistryPullHost, parts[1])
+		if onLog != nil {
+			onLog(fmt.Sprintf("push failed to %s, retrying push to %s", parts[0], RegistryPullHost))
+		}
+		// docker tag imageTag fallbackTag
+		tagCmd := exec.CommandContext(ctx, "docker", "tag", imageTag, fallbackTag)
+		tagOut, tagErr := runCmdStream(ctx, tagCmd, onLog)
+		out = out + "\n--- tag ---\n" + tagOut
+		if tagErr != nil {
+			return out + "\n" + tagErr.Error(), imageTag, tagErr
+		}
+		// docker push fallbackTag
+		pushCmd := exec.CommandContext(ctx, "docker", "push", fallbackTag)
+		pushOut, pushErr := runCmdStream(ctx, pushCmd, onLog)
+		out = out + "\n--- fallback push ---\n" + pushOut
+		if pushErr != nil {
+			return out + "\n" + pushErr.Error(), fallbackTag, pushErr
+		}
+		return out, fallbackTag, nil
+	}
+
+	return out + "\n" + err.Error(), imageTag, err
 }
 
 func (o *Orchestrator) waitForBuildJob(ctx context.Context, namespace, jobName string, onLog orchestrator.LogCallback) (string, error) {

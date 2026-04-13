@@ -396,4 +396,155 @@
             </root>
         </mxGraphModel>
     </diagram>
+    <diagram id="dev-cluster-wsl2" name="Dev Cluster (WSL2)">
+        <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <!-- WINDOWS HOST -->
+                <mxCell id="win" value="💻 Windows Host (Chrome / Edge)" style="swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+                    <mxGeometry x="30" y="30" width="1140" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="browser" value="Browser&#xa;astro.localhost" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="win">
+                    <mxGeometry x="30" y="45" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="win_dns" value="Windows DNS&#xa;*.localhost → 127.0.0.1&#xa;(RFC 6761, hardcoded)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="win">
+                    <mxGeometry x="240" y="45" width="180" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="wsl_fw" value="WSL2 Auto-Forward&#xa;detecta :80 activo en WSL2&#xa;→ tunnela automáticamente" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="win">
+                    <mxGeometry x="480" y="45" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="win_note" value="No requiere tocar /etc/hosts ni DNS externo" style="text;html=1;fontSize=10;fontStyle=2;align=right;" vertex="1" parent="win">
+                    <mxGeometry x="750" y="55" width="360" height="35" as="geometry"/>
+                </mxCell>
+                <!-- WSL2 / k3s HOST -->
+                <mxCell id="wsl" value="🐧 WSL2 / Linux Host  (k3s single-node)" style="swimlane;startSize=30;fillColor=#f0f0f0;strokeColor=#666666;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="30" y="190" width="1140" height="760" as="geometry"/>
+                </mxCell>
+                <!-- socat bridge -->
+                <mxCell id="socat" value="vipas-port-bridge (systemd)&#xa;socat :80 → 127.0.0.1:10080&#xa;socat :443 → 127.0.0.1:10443&#xa;&#xa;Sobrevive reinicios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" vertex="1" parent="wsl">
+                    <mxGeometry x="30" y="50" width="230" height="100" as="geometry"/>
+                </mxCell>
+                <!-- dnsmasq -->
+                <mxCell id="dnsmasq" value="dnsmasq (systemd)&#xa;address=/.localhost/172.26.31.240&#xa;→ cualquier *.localhost&#xa;  resuelve al VIP de MetalLB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="wsl">
+                    <mxGeometry x="310" y="50" width="230" height="100" as="geometry"/>
+                </mxCell>
+                <!-- Kubernetes zone -->
+                <mxCell id="k8s" value="Kubernetes (k3s)  —  CNI: Cilium" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="wsl">
+                    <mxGeometry x="30" y="195" width="1080" height="540" as="geometry"/>
+                </mxCell>
+                <!-- MetalLB -->
+                <mxCell id="metallb" value="MetalLB (layer2)&#xa;IPAddressPool: 172.26.31.240-250&#xa;VIP asignado: 172.26.31.240" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="20" y="40" width="230" height="65" as="geometry"/>
+                </mxCell>
+                <!-- Envoy Gateway control plane -->
+                <mxCell id="eg_cp" value="Envoy Gateway&#xa;(control plane)&#xa;ns: envoy-gateway-system" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="300" y="40" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <!-- EnvoyProxy CR -->
+                <mxCell id="envoyproxy_cr" value="EnvoyProxy CR&#xa;hostNetwork: true&#xa;strategy: Recreate&#xa;→ pod usa red del host" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="540" y="40" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <!-- Envoy dataplane pod -->
+                <mxCell id="envoy_pod" value="Envoy Dataplane Pod&#xa;hostNetwork: true&#xa;0.0.0.0:10080 (HTTP)&#xa;0.0.0.0:10443 (HTTPS)&#xa;podIP = nodeIP = 172.26.31.25" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=1;" vertex="1" parent="k8s">
+                    <mxGeometry x="780" y="30" width="210" height="85" as="geometry"/>
+                </mxCell>
+                <!-- LB Service -->
+                <mxCell id="lb_svc" value="Service: LoadBalancer&#xa;port 80 → targetPort 10080&#xa;port 443 → targetPort 10443&#xa;EXTERNAL-IP: 172.26.31.240" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="20" y="155" width="230" height="75" as="geometry"/>
+                </mxCell>
+                <!-- Gateway API objects -->
+                <mxCell id="gw_zone" value="Gateway API  (ns: gateway-system)" style="swimlane;startSize=22;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontStyle=1;" vertex="1" parent="k8s">
+                    <mxGeometry x="20" y="280" width="820" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="gwclass2" value="GatewayClass&#xa;envoy-gateway&#xa;parametersRef: EnvoyProxy/vipas-proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_zone">
+                    <mxGeometry x="15" y="35" width="210" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="gw2" value="Gateway&#xa;vipas-gateway&#xa;listeners: http/:80, https/:443&#xa;status.address: 172.26.31.240" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_zone">
+                    <mxGeometry x="245" y="35" width="200" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="hr1" value="HTTPRoute&#xa;hostname: astro.localhost&#xa;→ svc/astro :3000&#xa;(creado por API al añadir dominio)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_zone">
+                    <mxGeometry x="465" y="35" width="200" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="hrN" value="HTTPRoute N&#xa;hostname: *.localhost&#xa;→ svc/appN :puerto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="gw_zone">
+                    <mxGeometry x="675" y="35" width="135" height="75" as="geometry"/>
+                </mxCell>
+                <!-- App namespace -->
+                <mxCell id="ns_app" value="ns: sb-proyecto-xxxxx" style="swimlane;startSize=22;fillColor=#f0f0f0;strokeColor=#666666;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="20" y="450" width="400" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="app_pod" value="Pod: astro (Deployment)&#xa;containerPort: 3000" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_app">
+                    <mxGeometry x="20" y="30" width="170" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="app_svc" value="Service: astro&#xa;port: 3000" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="ns_app">
+                    <mxGeometry x="210" y="30" width="170" height="30" as="geometry"/>
+                </mxCell>
+                <!-- cert-manager -->
+                <mxCell id="cm2" value="cert-manager&#xa;Certificate CR (autocert)&#xa;ClusterIssuer: letsencrypt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="k8s">
+                    <mxGeometry x="860" y="280" width="195" height="65" as="geometry"/>
+                </mxCell>
+                <!-- API -->
+                <mxCell id="vipas_api" value="vipas API (Go)&#xa;domain_service + orchestrator&#xa;→ crea HTTPRoute + Certificate&#xa;   al añadir dominio en UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" vertex="1" parent="k8s">
+                    <mxGeometry x="860" y="155" width="195" height="80" as="geometry"/>
+                </mxCell>
+                <!-- EDGES -->
+                <!-- MetalLB → LB Service -->
+                <mxCell id="de1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="metallb" target="lb_svc" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- LB Service → Envoy pod -->
+                <mxCell id="de2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="lb_svc" target="envoy_pod" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- EG control plane → Envoy pod -->
+                <mxCell id="de3" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="eg_cp" target="envoy_pod" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- EnvoyProxy CR → Envoy pod -->
+                <mxCell id="de4" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#9673a6;" edge="1" source="envoyproxy_cr" target="envoy_pod" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- GatewayClass → Gateway -->
+                <mxCell id="de5" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gwclass2" target="gw2" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- Gateway → HTTPRoute -->
+                <mxCell id="de6" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw2" target="hr1" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="de7" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="gw2" target="hrN" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- HTTPRoute → App service -->
+                <mxCell id="de8" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="hr1" target="app_svc" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- App service → App pod -->
+                <mxCell id="de9" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="app_svc" target="app_pod" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- cert-manager → Gateway -->
+                <mxCell id="de10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#d6b656;" edge="1" source="cm2" target="gw2" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- vipas API → HTTPRoute -->
+                <mxCell id="de11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#82b366;" edge="1" source="vipas_api" target="hr1" parent="k8s">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- WSL edges (outside k8s) -->
+                <!-- socat → Envoy (via host network) -->
+                <mxCell id="we1" value=":80→:10080" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;fontStyle=1;fontSize=9;" edge="1" source="socat" target="k8s" parent="wsl">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- Win edges -->
+                <mxCell id="be1" value="127.0.0.1:80" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" edge="1" source="browser" target="wsl_fw" parent="win">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <!-- Win → WSL socat -->
+                <mxCell id="we2" value="WSL2 tunneling :80" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;fontSize=9;fontStyle=1;" edge="1" source="wsl_fw" target="socat" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>

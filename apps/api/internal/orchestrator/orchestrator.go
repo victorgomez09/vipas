@@ -98,6 +98,9 @@ type GatewayManager interface {
 	EnsurePanelHTTPRoute(ctx context.Context, domain, httpsEmail string) error
 	DeletePanelHTTPRoute(ctx context.Context) error
 	SyncHTTPRoutePorts(ctx context.Context, app *model.Application) error
+	// GetGatewayIP returns the external IP assigned by MetalLB to the Envoy Gateway.
+	// Returns an empty string (no error) when the gateway has no address yet.
+	GetGatewayIP(ctx context.Context) (string, error)
 }
 
 // StorageManager handles persistent volumes.

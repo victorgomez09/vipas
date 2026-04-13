@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -23,7 +24,8 @@ import (
 )
 
 var (
-	httpRouteGVR = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+	httpRouteGVR   = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+	certificateGVR = schema.GroupVersionResource{Group: "cert-manager.io", Version: "v1", Resource: "certificates"}
 )
 
 func httpRouteName(appName, host string) string {
@@ -43,6 +45,18 @@ func legacyHTTPRouteName(appName, host string) string {
 		return name[:63]
 	}
 	return name
+}
+
+// certificateName returns a safe name for cert-manager Certificate in the app namespace.
+func certificateName(appName, host string) string {
+	sanitized := fmt.Sprintf("%s-%s", appName, sanitize(host))
+	if len(sanitized) <= 63 {
+		return sanitized
+	}
+	full := fmt.Sprintf("%s-%s", appName, host)
+	h := sha256.Sum256([]byte(full))
+	suffix := hex.EncodeToString(h[:4])
+	return sanitized[:63-9] + "-" + suffix
 }
 
 // CreateHTTPRoute creates or updates an HTTPRoute pointing to the app Service.
@@ -94,20 +108,90 @@ func (o *Orchestrator) CreateHTTPRoute(ctx context.Context, domain *model.Domain
 		},
 	}}
 
-	_, err = dyn.Resource(httpRouteGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if _, createErr := dyn.Resource(httpRouteGVR).Namespace(ns).Create(ctx, hr, metav1.CreateOptions{}); createErr != nil {
-			return fmt.Errorf("create httproute: %w", createErr)
+	// (no-op marker removed)
+
+	// First, try to find an existing HTTPRoute for this app (label vipas/app-id=<app.ID>). If one
+	// exists, add the hostname to its spec.hostnames (if not already present) and update it. This
+	// avoids creating many routes per-app and keeps hostnames consolidated.
+	if list, lerr := dyn.Resource(httpRouteGVR).Namespace(ns).List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("vipas/app-id=%s", app.ID.String())}); lerr == nil && len(list.Items) > 0 {
+		existing := list.Items[0]
+		// read existing hostnames
+		hosts, found, _ := unstructured.NestedStringSlice(existing.Object, "spec", "hostnames")
+		if !found {
+			hosts = []string{}
 		}
-		o.logger.Info("httproute created", slog.String("host", domain.Host), slog.String("ns", ns))
-		return nil
+		// append if missing
+		present := false
+		for _, h := range hosts {
+			if h == domain.Host {
+				present = true
+				break
+			}
+		}
+		if !present {
+			hosts = append(hosts, domain.Host)
+			if err := unstructured.SetNestedStringSlice(existing.Object, hosts, "spec", "hostnames"); err != nil {
+				return fmt.Errorf("set hostnames: %w", err)
+			}
+			if _, uerr := dyn.Resource(httpRouteGVR).Namespace(ns).Update(ctx, &existing, metav1.UpdateOptions{}); uerr != nil {
+				return fmt.Errorf("update httproute hostnames: %w", uerr)
+			}
+			o.logger.Info("httproute updated (added hostname)", slog.String("host", domain.Host), slog.String("ns", ns))
+		} else {
+			o.logger.Info("httproute already contains hostname", slog.String("host", domain.Host), slog.String("ns", ns))
+		}
+
+	} else {
+		// No existing consolidated route — create a new one named by host
+		if _, err := dyn.Resource(httpRouteGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{}); err != nil {
+			if _, createErr := dyn.Resource(httpRouteGVR).Namespace(ns).Create(ctx, hr, metav1.CreateOptions{}); createErr != nil {
+				return fmt.Errorf("create httproute: %w", createErr)
+			}
+			o.logger.Info("httproute created", slog.String("host", domain.Host), slog.String("ns", ns))
+		}
 	}
 
-	// Update existing
-	if _, updateErr := dyn.Resource(httpRouteGVR).Namespace(ns).Update(ctx, hr, metav1.UpdateOptions{}); updateErr != nil {
-		return fmt.Errorf("update httproute: %w", updateErr)
+	// If TLS is requested and auto-cert is enabled, create a cert-manager Certificate
+	// Skip certificate creation for common dev domains (localhost, .local, nip.io, sslip.io, test)
+	if domain.TLS && domain.AutoCert {
+		h := strings.ToLower(strings.TrimSpace(domain.Host))
+		isDev := strings.Contains(h, "nip.io") || strings.Contains(h, "sslip.io") || strings.HasSuffix(h, ".localhost") || strings.HasSuffix(h, ".local") || strings.HasSuffix(h, ".test") || strings.Contains(h, "traefik.me")
+		if !isDev {
+			certName := certificateName(appK8sName(app), domain.Host)
+			secretName := fmt.Sprintf("%s-tls", certName)
+			cert := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "cert-manager.io/v1",
+				"kind":       "Certificate",
+				"metadata": map[string]interface{}{
+					"name":      certName,
+					"namespace": ns,
+					"labels":    labels,
+				},
+				"spec": map[string]interface{}{
+					"secretName": secretName,
+					"dnsNames":   []interface{}{domain.Host},
+					// Default to letsencrypt-staging; cluster admin can change SettingCertIssuer later
+					"issuerRef": map[string]interface{}{"name": "letsencrypt-staging", "kind": "ClusterIssuer"},
+				},
+			}}
+
+			if _, gErr := dyn.Resource(certificateGVR).Namespace(ns).Get(ctx, certName, metav1.GetOptions{}); gErr != nil {
+				if _, cErr := dyn.Resource(certificateGVR).Namespace(ns).Create(ctx, cert, metav1.CreateOptions{}); cErr != nil {
+					o.logger.Warn("failed to create certificate", slog.String("host", domain.Host), slog.Any("error", cErr))
+				} else {
+					o.logger.Info("certificate created", slog.String("host", domain.Host), slog.String("ns", ns))
+				}
+			} else {
+				// Update existing cert (best-effort)
+				if _, uErr := dyn.Resource(certificateGVR).Namespace(ns).Update(ctx, cert, metav1.UpdateOptions{}); uErr != nil {
+					o.logger.Warn("failed to update certificate", slog.String("host", domain.Host), slog.Any("error", uErr))
+				} else {
+					o.logger.Info("certificate updated", slog.String("host", domain.Host), slog.String("ns", ns))
+				}
+			}
+		}
 	}
-	o.logger.Info("httproute updated", slog.String("host", domain.Host), slog.String("ns", ns))
+
 	return nil
 }
 

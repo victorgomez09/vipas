@@ -19,4 +19,5 @@ const (
 	SettingCertIssuer  = "cert_issuer"  // letsencrypt-staging | letsencrypt-prod | selfsigned
 	SettingLBType      = "lb_type"      // nodeport | metallb | cilium-bgp
 	SettingLBIPPool    = "lb_ip_pool"   // CIDR or IP range for MetalLB pool
+	SettingGatewayIP   = "gateway_ip"   // external IP assigned by MetalLB to the Envoy Gateway
 )

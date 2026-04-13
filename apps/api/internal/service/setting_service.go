@@ -42,7 +42,12 @@ func (s *SettingService) InitDefaults(ctx context.Context) error {
 
 		existing, _ := s.store.Settings().Get(ctx, model.SettingBaseDomain)
 		if existing == "" {
-			baseDomain := fmt.Sprintf("%s.sslip.io", ip)
+			// Prefer MetalLB VIP as the base domain anchor when available.
+			baseDomainIP := ip
+			if gwIP := s.detectGatewayIP(ctx); gwIP != "" {
+				baseDomainIP = gwIP
+			}
+			baseDomain := fmt.Sprintf("%s.sslip.io", baseDomainIP)
 			_ = s.store.Settings().Set(ctx, model.SettingBaseDomain, baseDomain)
 			s.logger.Info("set default base domain", slog.String("domain", baseDomain))
 		}
@@ -56,6 +61,15 @@ func (s *SettingService) InitDefaults(ctx context.Context) error {
 // This ensures panel ingress, HTTPS redirect middleware, and other K8s
 // resources survive restarts, accidental deletions, or cleanup operations.
 func (s *SettingService) ReconcileInfra(ctx context.Context) {
+	// Refresh the MetalLB VIP assigned to the Envoy Gateway on every boot.
+	if gwIP := s.detectGatewayIP(ctx); gwIP != "" {
+		if err := s.store.Settings().Set(ctx, model.SettingGatewayIP, gwIP); err != nil {
+			s.logger.Warn("reconcile: failed to store gateway IP", slog.Any("error", err))
+		} else {
+			s.logger.Info("gateway IP refreshed", slog.String("ip", gwIP))
+		}
+	}
+
 	// Re-apply panel ingress if a domain is configured
 	if err := s.applyPanelDomain(ctx, s.getPanelDomain(ctx)); err != nil {
 		s.logger.Warn("reconcile: panel ingress not applied", slog.Any("error", err))
@@ -65,6 +79,17 @@ func (s *SettingService) ReconcileInfra(ctx context.Context) {
 func (s *SettingService) getPanelDomain(ctx context.Context) string {
 	val, _ := s.store.Settings().Get(ctx, model.SettingPanelDomain)
 	return val
+}
+
+// detectGatewayIP queries the Envoy Gateway's status to get the MetalLB-assigned VIP.
+// Returns an empty string when the gateway is not yet ready or not running on k3s.
+func (s *SettingService) detectGatewayIP(ctx context.Context) string {
+	ip, err := s.orch.GetGatewayIP(ctx)
+	if err != nil {
+		s.logger.Debug("detectGatewayIP: could not read gateway IP", slog.Any("error", err))
+		return ""
+	}
+	return ip
 }
 
 // detectK3sNodeIP gets the InternalIP of the first control-plane node.

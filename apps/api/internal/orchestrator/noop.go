@@ -581,6 +581,11 @@ func (n *NoopOrchestrator) SyncHTTPRoutePorts(ctx context.Context, app *model.Ap
 	return nil
 }
 
+func (n *NoopOrchestrator) GetGatewayIP(ctx context.Context) (string, error) {
+	n.logger.Info("[noop] get gateway ip")
+	return "", nil
+}
+
 // LoadBalancer methods (noop)
 func (n *NoopOrchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error {
 	n.logger.Info("[noop] ensure load balancer", slog.String("type", lbType), slog.String("pool", ipPool))

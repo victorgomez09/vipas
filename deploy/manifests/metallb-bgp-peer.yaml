@@ -1,0 +1,13 @@
+apiVersion: metallb.io/v1beta1
+kind: BGPPeer
+metadata:
+  name: ${NAME}
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/managed-by: vipas
+spec:
+  peerAddress: ${PEER_ADDRESS}
+  peerASN: ${PEER_ASN}
+  # optional sourceAddress and password
+  sourceAddress: ${SOURCE_ADDRESS}
+  password: ${PASSWORD}

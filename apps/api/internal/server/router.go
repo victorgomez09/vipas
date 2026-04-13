@@ -241,6 +241,8 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.POST("/cluster/cleanup/orphan-routes", cluster.CleanupOrphanRoutes)
 			protected.GET("/cluster/gateway/status", cluster.GetGatewayStatus)
 			protected.GET("/cluster/gateway/routes", cluster.ListGatewayRoutes)
+			// Load balancer / infra status
+			protected.GET("/infra/lb/status", cluster.GetLBStatus)
 
 			// Monitoring
 			monitoring := v1.NewMonitoringHandler(deps.Services.Metrics)

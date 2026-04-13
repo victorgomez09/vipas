@@ -60,6 +60,7 @@ import {
 } from "@/hooks/use-notifications";
 import { useResources } from "@/hooks/use-resources";
 import { useSettings, useUpdateSetting, useVerifyDomain } from "@/hooks/use-settings";
+import useLBStatus from "@/hooks/use-lb-status";
 import {
   useSaveSystemBackupConfig,
   useSystemBackupConfig,
@@ -457,6 +458,9 @@ function GeneralTab() {
         </CardContent>
       </Card>
 
+      {/* Load Balancer */}
+      <LoadBalancerCard settings={settings} saveSetting={useUpdateSetting()} />
+
       {/* Wildcard Domain */}
       <Card>
         <CardHeader>
@@ -565,6 +569,94 @@ function GeneralTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function LoadBalancerCard({ settings, saveSetting }: { settings: any; saveSetting: ReturnType<typeof useUpdateSetting> }) {
+  const { status, loading } = useLBStatus();
+  const [lbType, setLbType] = useState(settings?.lb_type ?? "nodeport");
+  const [lbPool, setLbPool] = useState(settings?.lb_ip_pool ?? "");
+
+  useEffect(() => {
+    setLbType(settings?.lb_type ?? "nodeport");
+    setLbPool(settings?.lb_ip_pool ?? "");
+  }, [settings]);
+
+  function handleSave() {
+    saveSetting.mutate({ key: "lb_type", value: lbType });
+    saveSetting.mutate({ key: "lb_ip_pool", value: lbPool });
+    toast.success("Load balancer settings saved");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Server className="h-4 w-4" /> Load Balancer
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Type</span>
+            <Select value={lbType} onValueChange={setLbType}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nodeport">nodeport</SelectItem>
+                <SelectItem value="metallb">metallb</SelectItem>
+                <SelectItem value="cilium-bgp">cilium-bgp</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">IP Pool</span>
+            <Input value={lbPool} onChange={(e) => setLbPool(e.target.value)} className="w-64 font-mono" placeholder="e.g. 198.51.100.0/24 or 198.51.100.5-198.51.100.20" />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Status</Label>
+            {loading || !status ? (
+              <p className="text-sm text-muted-foreground">Detecting load balancer status...</p>
+            ) : (
+              <div className="space-y-1 text-xs">
+                <p>
+                  <strong>Type:</strong> {status.type}
+                </p>
+                <p>
+                  <strong>IP Pools:</strong> {status.ip_pools?.length ? status.ip_pools.join(", ") : "-"}
+                </p>
+                <p>
+                  <strong>Assigned IPs:</strong> {status.assigned_ips?.length ? status.assigned_ips.join(", ") : "-"}
+                </p>
+                <div>
+                  <strong>BGP Peers:</strong>
+                  {status.bgp_peers && status.bgp_peers.length ? (
+                    <ul className="list-inside list-disc ml-4 text-xs">
+                      {status.bgp_peers.map((p: any) => (
+                        <li key={p.name}>
+                          {p.peer_address} (ASN {p.peer_asn}) {p.source_address ? `— src ${p.source_address}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">No BGP peers configured</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSave} size="sm">
+              <Save className="h-3.5 w-3.5" /> Save
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

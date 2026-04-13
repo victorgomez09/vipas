@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	ipPoolGVR = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "ipaddresspools"}
-	l2AdvGVR  = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "l2advertisements"}
+	ipPoolGVR  = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "ipaddresspools"}
+	l2AdvGVR   = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "l2advertisements"}
+	bgpPeerGVR = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "bgppeers"}
 )
 
 // EnsureLoadBalancer configures MetalLB resources when lbType == "metallb".
@@ -114,7 +115,46 @@ func (o *Orchestrator) GetLoadBalancerStatus(ctx context.Context) (*orchestrator
 		}
 	}
 
-	return &orchestrator.LBStatus{Type: "metallb", IPPools: poolNames, AssignedIPs: assigned}, nil
+	// List BGPPeers (if any)
+	var peers []orchestrator.BGPPeerInfo
+	if bpList, err := dyn.Resource(bgpPeerGVR).Namespace("metallb-system").List(ctx, metav1.ListOptions{}); err == nil {
+		for _, it := range bpList.Items {
+			spec := it.Object["spec"]
+			var peerAddr string
+			var peerASN int64
+			var srcAddr string
+			if specMap, ok := spec.(map[string]interface{}); ok {
+				if v, ok := specMap["peerAddress"]; ok {
+					if s, ok := v.(string); ok {
+						peerAddr = s
+					}
+				}
+				if v, ok := specMap["peerASN"]; ok {
+					switch val := v.(type) {
+					case int64:
+						peerASN = val
+					case int:
+						peerASN = int64(val)
+					case float64:
+						peerASN = int64(val)
+					}
+				}
+				if v, ok := specMap["sourceAddress"]; ok {
+					if s, ok := v.(string); ok {
+						srcAddr = s
+					}
+				}
+			}
+			peers = append(peers, orchestrator.BGPPeerInfo{
+				Name:        it.GetName(),
+				PeerAddress: peerAddr,
+				PeerASN:     peerASN,
+				SourceAddr:  srcAddr,
+			})
+		}
+	}
+
+	return &orchestrator.LBStatus{Type: "metallb", IPPools: poolNames, AssignedIPs: assigned, BGPPeers: peers}, nil
 }
 
 // Ensure k8s compile-time check for interface

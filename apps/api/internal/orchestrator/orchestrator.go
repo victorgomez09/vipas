@@ -182,9 +182,18 @@ type ClusterTopology struct {
 
 // LBStatus reports basic load-balancer information.
 type LBStatus struct {
-	Type        string   `json:"type"`
-	IPPools     []string `json:"ip_pools"`
-	AssignedIPs []string `json:"assigned_ips"`
+	Type        string        `json:"type"`
+	IPPools     []string      `json:"ip_pools"`
+	AssignedIPs []string      `json:"assigned_ips"`
+	BGPPeers    []BGPPeerInfo `json:"bgp_peers,omitempty"`
+}
+
+// BGPPeerInfo reports a configured MetalLB BGPPeer.
+type BGPPeerInfo struct {
+	Name        string `json:"name"`
+	PeerAddress string `json:"peer_address"`
+	PeerASN     int64  `json:"peer_asn"`
+	SourceAddr  string `json:"source_address,omitempty"`
 }
 
 type TopologyNode struct {

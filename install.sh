@@ -181,11 +181,8 @@ install_cilium() {
 # ── Install MetalLB (optional) ───────────────────────────────────
 install_metallb() {
     . "$ENV_FILE" 2>/dev/null || true
-    LB_TYPE="${LB_TYPE:-}"
-    if [ "${LB_TYPE}" != "metallb" ]; then
-        info "Skipping MetalLB install (LB_TYPE=${LB_TYPE:-none})"
-        return
-    fi
+
+        info "Installing MetalLB (LB_TYPE=${LB_TYPE:-none})"
 
     info "Installing MetalLB"
     install_helm
@@ -219,6 +216,33 @@ install_metallb() {
         ok "MetalLB IP pool applied"
     fi
     rm -f "$TMP_MANIFEST"
+
+    # If METALLB_BGP_PEERS is set (comma separated list of peer entries), render BGPPeer manifests
+    METALLB_BGP_PEERS="${METALLB_BGP_PEERS:-}"
+    if [ -n "$METALLB_BGP_PEERS" ]; then
+        info "Configuring MetalLB BGP peers"
+        IFS=','
+        for entry in $METALLB_BGP_PEERS; do
+            # Expected entry format: peerAddress:peerASN[:sourceAddress[:password]]
+            IFS=':' read -r peerAddr peerAsn srcAddr pwd <<EOF
+$entry
+EOF
+            if [ -z "$peerAddr" ] || [ -z "$peerAsn" ]; then
+                warn "Skipping invalid METALLB_BGP_PEERS entry: $entry"
+                continue
+            fi
+            NAME="vipas-bgp-$(echo $peerAddr | tr '.' '-')"
+            TMP_BP=$(mktemp)
+            sed "s|\${NAME}|${NAME}|g; s|\${PEER_ADDRESS}|${peerAddr}|g; s|\${PEER_ASN}|${peerAsn}|g; s|\${SOURCE_ADDRESS}|${srcAddr:-}|g; s|\${PASSWORD}|${pwd:-}|g" deploy/manifests/metallb-bgp-peer.yaml > "$TMP_BP"
+            if ! k3s kubectl apply -f "$TMP_BP" >/dev/null 2>&1; then
+                warn "Failed to apply BGPPeer manifest for ${peerAddr}"
+            else
+                ok "Applied BGPPeer for ${peerAddr}"
+            fi
+            rm -f "$TMP_BP"
+        done
+        unset IFS
+    fi
 }
 
 # ── Install Gateway API CRDs ────────────────────────────────────

@@ -316,6 +316,14 @@ export interface ClusterMetrics {
   };
 }
 
+export interface EtcdQuorumStatus {
+  total_control_planes: number;
+  ready_control_planes: number;
+  quorum_required: number;
+  has_quorum: boolean;
+  strategy: string;
+}
+
 // ── Cluster monitoring ──────────────────────────────────────────────
 
 export interface ClusterEvent {
@@ -458,7 +466,7 @@ export interface ServerNode {
   ssh_user: string;
   auth_type: string; // password | ssh_key
   ssh_key_id?: string;
-  role: string; // worker | server
+  role: string; // worker | server | control-plane | gateway
   status: string; // pending | initializing | ready | error | offline
   status_msg: string;
   k8s_node_name: string;

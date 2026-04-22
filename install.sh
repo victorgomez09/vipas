@@ -82,12 +82,39 @@ install_k3s() {
     # For production we disable the embedded Traefik and Flannel in K3s
     FLANNEL_BACKEND="none"
 
-    info "Installing K3s (Traefik and Flannel disabled)..."
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
-        --disable=traefik \
-        --flannel-backend=$FLANNEL_BACKEND \
-        --disable-network-policy \
-        --write-kubeconfig-mode=644" sh -
+    . "$ENV_FILE" 2>/dev/null || true
+
+    K3S_HA_MODE="${K3S_HA_MODE:-false}"
+    K3S_CLUSTER_INIT="${K3S_CLUSTER_INIT:-false}"
+    K3S_API_VIP="${K3S_API_VIP:-}"
+    K3S_SERVER_URL="${K3S_SERVER_URL:-}"
+
+    if [ -z "$K3S_SERVER_URL" ] && [ -n "$K3S_API_VIP" ]; then
+        K3S_SERVER_URL="https://${K3S_API_VIP}:6443"
+    fi
+
+    BASE_EXEC="server --disable=traefik --flannel-backend=$FLANNEL_BACKEND --disable-network-policy --write-kubeconfig-mode=644"
+    INSTALL_EXEC="$BASE_EXEC"
+
+    if [ "$K3S_HA_MODE" = "true" ]; then
+        if [ "$K3S_CLUSTER_INIT" = "true" ]; then
+            INSTALL_EXEC="$BASE_EXEC --cluster-init"
+            info "Installing K3s control-plane in HA bootstrap mode (--cluster-init)..."
+        else
+            [ -n "$K3S_SERVER_URL" ] || fail "K3S_SERVER_URL or K3S_API_VIP is required when joining HA control-plane"
+            INSTALL_EXEC="$BASE_EXEC --server $K3S_SERVER_URL"
+            info "Installing K3s control-plane joining HA server: $K3S_SERVER_URL"
+        fi
+    else
+        info "Installing K3s (Traefik and Flannel disabled)..."
+    fi
+
+    if [ "$K3S_HA_MODE" = "true" ] && [ "$K3S_CLUSTER_INIT" != "true" ]; then
+        [ -n "${K3S_TOKEN:-}" ] || fail "K3S_TOKEN is required for HA control-plane join"
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_EXEC" K3S_TOKEN="$K3S_TOKEN" sh -
+    else
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_EXEC" sh -
+    fi
 
     info "Waiting for K3s..."
     for i in $(seq 1 60); do
@@ -96,6 +123,62 @@ install_k3s() {
     done
     k3s kubectl get nodes >/dev/null 2>&1 || fail "K3s failed to start"
     ok "K3s running"
+}
+
+# ── Configure kube-vip API VIP (HA control-plane) ──────────────
+configure_kube_vip() {
+    . "$ENV_FILE" 2>/dev/null || true
+
+    K3S_HA_MODE="${K3S_HA_MODE:-false}"
+    K3S_API_VIP="${K3S_API_VIP:-}"
+    KUBE_VIP_INTERFACE="${KUBE_VIP_INTERFACE:-}"
+
+    if [ "$K3S_HA_MODE" != "true" ]; then
+        return
+    fi
+
+    if [ -z "$K3S_API_VIP" ]; then
+        warn "K3S_API_VIP is not set, skipping kube-vip API VIP setup"
+        return
+    fi
+
+    if [ -z "$KUBE_VIP_INTERFACE" ]; then
+        KUBE_VIP_INTERFACE=$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')
+    fi
+    [ -n "$KUBE_VIP_INTERFACE" ] || KUBE_VIP_INTERFACE="eth0"
+
+    info "Applying kube-vip (API VIP ${K3S_API_VIP}:6443 on ${KUBE_VIP_INTERFACE})"
+    TMP_KV=$(mktemp)
+    sed "s|\${K3S_API_VIP}|${K3S_API_VIP}|g; s|\${KUBE_VIP_INTERFACE}|${KUBE_VIP_INTERFACE}|g" deploy/manifests/kube-vip-api-vip.yaml > "$TMP_KV"
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    if ! k3s kubectl apply -f "$TMP_KV" >/dev/null 2>&1; then
+        warn "Failed to apply kube-vip resources"
+        rm -f "$TMP_KV"
+        return
+    fi
+    rm -f "$TMP_KV"
+
+    if ! k3s kubectl -n kube-system rollout status daemonset/kube-vip-ds --timeout=180s >/dev/null 2>&1; then
+        warn "kube-vip DaemonSet rollout did not complete in time"
+    else
+        ok "kube-vip API VIP configured"
+    fi
+}
+
+# ── Write kubeconfig pointing to API VIP ───────────────────────
+configure_kubeconfig_vip() {
+    . "$ENV_FILE" 2>/dev/null || true
+
+    K3S_API_VIP="${K3S_API_VIP:-}"
+    if [ -z "$K3S_API_VIP" ]; then
+        return
+    fi
+
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    mkdir -p "$INSTALL_DIR/kubeconfig"
+    sed "s|https://127.0.0.1:6443|https://${K3S_API_VIP}:6443|g" /etc/rancher/k3s/k3s.yaml > "$INSTALL_DIR/kubeconfig/kubeconfig.yaml"
+    chmod 600 "$INSTALL_DIR/kubeconfig/kubeconfig.yaml"
+    ok "Wrote kubeconfig with API VIP to $INSTALL_DIR/kubeconfig/kubeconfig.yaml"
 }
 
 # ── Install Helm (if missing) ───────────────────────────────────
@@ -178,71 +261,85 @@ install_cilium() {
 }
 
 
-# ── Install MetalLB (optional) ───────────────────────────────────
-install_metallb() {
+# ── Configure Cilium LB mode (dev/prod) ────────────────────────
+configure_cilium_lb() {
     . "$ENV_FILE" 2>/dev/null || true
 
-        info "Installing MetalLB (LB_TYPE=${LB_TYPE:-none})"
-
-    info "Installing MetalLB"
-    install_helm
-    helm repo add metallb https://metallb.github.io/metallb >/dev/null 2>&1 || true
-    helm repo update >/dev/null 2>&1 || true
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-    # Install MetalLB via Helm (chart: metallb/metallb)
-    if ! helm upgrade --install metallb metallb/metallb \
-      -n metallb-system --create-namespace --wait --timeout 5m >/dev/null 2>&1; then
-        warn "MetalLB helm install returned non-zero (check: k3s kubectl -n metallb-system get pods)"
-    else
-        ok "MetalLB install invoked"
+    LB_TYPE="${LB_TYPE:-}"
+    LB_IP_POOL="${LB_IP_POOL:-}"
+
+    if [ -z "$LB_TYPE" ]; then
+        NODE_COUNT=$(k3s kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d '[:space:]')
+        if [ "${NODE_COUNT:-0}" -le 1 ]; then
+            LB_TYPE="cilium-l2"
+        else
+            LB_TYPE="cilium-bgp"
+        fi
+        info "LB_TYPE not set, inferred ${LB_TYPE} from topology (${NODE_COUNT} node/s)"
     fi
 
-    # Apply the IPAddressPool + L2Advertisement manifest if METALLB_IP_POOL set
-    METALLB_IP_POOL="${METALLB_IP_POOL:-}"
-    if [ -z "$METALLB_IP_POOL" ]; then
-        warn "METALLB_IP_POOL not set — skipping IP pool creation. Set METALLB_IP_POOL in $ENV_FILE"
+    case "$LB_TYPE" in
+        cilium-l2|cilium-bgp|nodeport) ;;
+        *)
+            warn "Unsupported LB_TYPE=${LB_TYPE}. Allowed: cilium-l2 | cilium-bgp | nodeport"
+            return
+            ;;
+    esac
+
+    if [ "$LB_TYPE" = "nodeport" ]; then
+        info "LB_TYPE=nodeport, skipping Cilium LB resources"
         return
     fi
 
-    info "Applying MetalLB IPAddressPool using: $METALLB_IP_POOL"
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    # Render manifest with the provided IP pool and apply
-    TMP_MANIFEST=$(mktemp)
-    sed "s|\${METALLB_IP_POOL}|${METALLB_IP_POOL}|g" deploy/manifests/metallb-ip-pool.yaml > "$TMP_MANIFEST"
-    if ! k3s kubectl apply -f "$TMP_MANIFEST" >/dev/null 2>&1; then
-        warn "Failed to apply MetalLB IP pool manifest"
-    else
-        ok "MetalLB IP pool applied"
+    if [ -z "$LB_IP_POOL" ]; then
+        warn "LB_IP_POOL not set — skipping LB pool creation. Configure LB_IP_POOL in $ENV_FILE"
+        return
     fi
-    rm -f "$TMP_MANIFEST"
 
-    # If METALLB_BGP_PEERS is set (comma separated list of peer entries), render BGPPeer manifests
-    METALLB_BGP_PEERS="${METALLB_BGP_PEERS:-}"
-    if [ -n "$METALLB_BGP_PEERS" ]; then
-        info "Configuring MetalLB BGP peers"
-        IFS=','
-        for entry in $METALLB_BGP_PEERS; do
-            # Expected entry format: peerAddress:peerASN[:sourceAddress[:password]]
-            IFS=':' read -r peerAddr peerAsn srcAddr pwd <<EOF
-$entry
-EOF
-            if [ -z "$peerAddr" ] || [ -z "$peerAsn" ]; then
-                warn "Skipping invalid METALLB_BGP_PEERS entry: $entry"
-                continue
-            fi
-            NAME="vipas-bgp-$(echo $peerAddr | tr '.' '-')"
-            TMP_BP=$(mktemp)
-            sed "s|\${NAME}|${NAME}|g; s|\${PEER_ADDRESS}|${peerAddr}|g; s|\${PEER_ASN}|${peerAsn}|g; s|\${SOURCE_ADDRESS}|${srcAddr:-}|g; s|\${PASSWORD}|${pwd:-}|g" deploy/manifests/metallb-bgp-peer.yaml > "$TMP_BP"
-            if ! k3s kubectl apply -f "$TMP_BP" >/dev/null 2>&1; then
-                warn "Failed to apply BGPPeer manifest for ${peerAddr}"
-            else
-                ok "Applied BGPPeer for ${peerAddr}"
-            fi
-            rm -f "$TMP_BP"
-        done
-        unset IFS
+    info "Applying Cilium LB pool: ${LB_IP_POOL}"
+    TMP_POOL=$(mktemp)
+    sed "s|\${LB_IP_POOL}|${LB_IP_POOL}|g" deploy/manifests/cilium-lb-ip-pool.yaml > "$TMP_POOL"
+    if ! k3s kubectl apply -f "$TMP_POOL" >/dev/null 2>&1; then
+        warn "Failed to apply CiliumLoadBalancerIPPool"
+        rm -f "$TMP_POOL"
+        return
     fi
+    rm -f "$TMP_POOL"
+    ok "CiliumLoadBalancerIPPool applied"
+
+    if [ "$LB_TYPE" = "cilium-l2" ]; then
+        info "Applying Cilium L2 announcement policy"
+        if ! k3s kubectl apply -f deploy/manifests/cilium-l2-announcement.yaml >/dev/null 2>&1; then
+            warn "Failed to apply CiliumL2AnnouncementPolicy"
+        else
+            ok "Cilium L2 announcement configured"
+        fi
+        k3s kubectl delete ciliumbgppeeringpolicy vipas-bgp-peering --ignore-not-found >/dev/null 2>&1 || true
+        return
+    fi
+
+    # cilium-bgp mode
+    BGP_LOCAL_ASN="${BGP_LOCAL_ASN:-64512}"
+    BGP_PEER_ADDRESS="${BGP_PEER_ADDRESS:-}"
+    BGP_PEER_ASN="${BGP_PEER_ASN:-}"
+
+    if [ -z "$BGP_PEER_ADDRESS" ] || [ -z "$BGP_PEER_ASN" ]; then
+        warn "BGP mode selected but BGP_PEER_ADDRESS/BGP_PEER_ASN not set. Pool created; peer setup remains pending."
+        return
+    fi
+
+    info "Applying Cilium BGP peering policy (${BGP_PEER_ADDRESS}, ASN ${BGP_PEER_ASN})"
+    TMP_BGP=$(mktemp)
+    sed "s|\${BGP_LOCAL_ASN}|${BGP_LOCAL_ASN}|g; s|\${BGP_PEER_ADDRESS}|${BGP_PEER_ADDRESS}|g; s|\${BGP_PEER_ASN}|${BGP_PEER_ASN}|g" deploy/manifests/cilium-bgp-peering-policy.yaml > "$TMP_BGP"
+    if ! k3s kubectl apply -f "$TMP_BGP" >/dev/null 2>&1; then
+        warn "Failed to apply CiliumBGPPeeringPolicy"
+    else
+        ok "Cilium BGP peering policy applied"
+    fi
+    rm -f "$TMP_BGP"
+    k3s kubectl delete ciliuml2announcementpolicy vipas-l2-announcement --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ── Install Gateway API CRDs ────────────────────────────────────
@@ -285,6 +382,15 @@ apply_gateway_manifests() {
     info "Applying Gateway manifests"
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
     k3s kubectl create ns gateway-system >/dev/null 2>&1 || true
+
+    # Dedicated gateway-node mode uses an Envoy DaemonSet pinned to vipas/pool=gateway.
+    # Default mode keeps a regular Envoy Deployment suitable for single-node/dev.
+    if [ "${GATEWAY_DEDICATED_NODES:-false}" = "true" ]; then
+        k3s kubectl apply -f deploy/manifests/envoyproxy-gateway-nodes.yaml >/dev/null 2>&1 || warn "Failed to apply envoyproxy-gateway-nodes.yaml"
+    else
+        k3s kubectl apply -f deploy/manifests/envoyproxy.yaml >/dev/null 2>&1 || warn "Failed to apply envoyproxy.yaml"
+    fi
+
     k3s kubectl apply -f deploy/manifests/gatewayclass.yaml >/dev/null 2>&1 || warn "Failed to apply gatewayclass.yaml"
     k3s kubectl apply -f deploy/manifests/gateway.yaml >/dev/null 2>&1 || warn "Failed to apply gateway.yaml"
 
@@ -496,8 +602,10 @@ main() {
     preflight
     install_docker
     install_k3s
+    configure_kube_vip
+    configure_kubeconfig_vip
     install_cilium
-    install_metallb
+    configure_cilium_lb
     install_gateway_api_crds
     install_envoy_gateway
     apply_gateway_manifests

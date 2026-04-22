@@ -225,6 +225,16 @@ func (n *NoopOrchestrator) GetNodes(ctx context.Context) ([]NodeInfo, error) {
 	}, nil
 }
 
+func (n *NoopOrchestrator) GetEtcdQuorumStatus(ctx context.Context) (*EtcdQuorumStatus, error) {
+	return &EtcdQuorumStatus{
+		TotalControlPlanes: 1,
+		ReadyControlPlanes: 1,
+		QuorumRequired:     1,
+		HasQuorum:          true,
+		Strategy:           "k3s-embedded-etcd",
+	}, nil
+}
+
 func (n *NoopOrchestrator) GetClusterMetrics(ctx context.Context) (*ClusterMetrics, error) {
 	return &ClusterMetrics{
 		Nodes:       1,
@@ -429,6 +439,16 @@ func (n *NoopOrchestrator) RemoveNodeLabel(ctx context.Context, nodeName, key st
 	return nil
 }
 
+func (n *NoopOrchestrator) SetNodeTaint(ctx context.Context, nodeName, key, value, effect string) error {
+	n.logger.Info("[noop] set node taint", slog.String("node", nodeName), slog.String("key", key), slog.String("value", value), slog.String("effect", effect))
+	return nil
+}
+
+func (n *NoopOrchestrator) RemoveNodeTaint(ctx context.Context, nodeName, key, effect string) error {
+	n.logger.Info("[noop] remove node taint", slog.String("node", nodeName), slog.String("key", key), slog.String("effect", effect))
+	return nil
+}
+
 func (n *NoopOrchestrator) GetNodePools(ctx context.Context) ([]string, error) {
 	return []string{"default", "build"}, nil
 }
@@ -594,7 +614,7 @@ func (n *NoopOrchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPoo
 
 func (n *NoopOrchestrator) GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error) {
 	n.logger.Info("[noop] get lb status")
-	return &LBStatus{Type: "nodeport", IPPools: []string{}, AssignedIPs: []string{}}, nil
+	return &LBStatus{Type: "cilium-l2", IPPools: []string{}, AssignedIPs: []string{}}, nil
 }
 
 // Traefik-specific handlers removed; Gateway API methods implemented elsewhere.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -14,16 +16,34 @@ import (
 )
 
 var (
-	ipPoolGVR  = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "ipaddresspools"}
-	l2AdvGVR   = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "l2advertisements"}
-	bgpPeerGVR = schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "bgppeers"}
+	ciliumLBPoolGVR       = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliumloadbalancerippools"}
+	ciliumL2PolicyGVR     = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliuml2announcementpolicies"}
+	ciliumBGPPeeringGVR   = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliumbgppeeringpolicies"}
+	vipasLBPoolName       = "vipas-lb-pool"
+	vipasL2PolicyName     = "vipas-l2-announcement"
+	vipasBGPPolicyName    = "vipas-bgp-peering"
+	managedByLabel        = "app.kubernetes.io/managed-by"
+	managedByLabelValue   = "vipas"
+	defaultCiliumLocalASN = int64(64512)
 )
 
-// EnsureLoadBalancer configures MetalLB resources when lbType == "metallb".
+// EnsureLoadBalancer configures Cilium LB resources for cilium-l2 or cilium-bgp.
+// lbType accepts: cilium-l2, cilium-bgp, nodeport.
 func (o *Orchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error {
-	if lbType != "metallb" {
-		o.logger.Info("EnsureLoadBalancer: skipping, lb type not metallb", slog.String("type", lbType))
+	lbType = normalizeLBType(lbType)
+	if lbType == "" {
+		lbType = "nodeport"
+	}
+	if lbType == "nodeport" {
+		o.logger.Info("EnsureLoadBalancer: skipping, nodeport mode")
 		return nil
+	}
+	if lbType != "cilium-l2" && lbType != "cilium-bgp" {
+		return fmt.Errorf("unsupported lb type %q", lbType)
+	}
+	ipPool = strings.TrimSpace(ipPool)
+	if ipPool == "" {
+		return fmt.Errorf("ip pool is required for %s", lbType)
 	}
 
 	dyn, err := dynamic.NewForConfig(o.config)
@@ -31,54 +51,83 @@ func (o *Orchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool st
 		return fmt.Errorf("create dynamic client: %w", err)
 	}
 
-	// Ensure metallb-system namespace exists
-	if err := o.ensureNamespace(ctx, "metallb-system"); err != nil {
-		return fmt.Errorf("ensure metallb namespace: %w", err)
-	}
-
-	// Create IPAddressPool
-	poolName := "vipas-ip-pool"
-	ipp := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "metallb.io/v1beta1",
-		"kind":       "IPAddressPool",
+	// Ensure a Cilium LB IP pool exists for Gateway Service allocations.
+	pool := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "cilium.io/v2alpha1",
+		"kind":       "CiliumLoadBalancerIPPool",
 		"metadata": map[string]interface{}{
-			"name":      poolName,
-			"namespace": "metallb-system",
-			"labels":    map[string]interface{}{"app.kubernetes.io/managed-by": "vipas"},
+			"name": vipasLBPoolName,
+			"labels": map[string]interface{}{
+				managedByLabel: managedByLabelValue,
+			},
 		},
 		"spec": map[string]interface{}{
-			"addresses": []interface{}{ipPool},
+			"blocks": []interface{}{
+				map[string]interface{}{"cidr": ipPool},
+			},
 		},
 	}}
-
-	if _, err := dyn.Resource(ipPoolGVR).Namespace("metallb-system").Get(ctx, poolName, metav1.GetOptions{}); err != nil {
-		if _, cErr := dyn.Resource(ipPoolGVR).Namespace("metallb-system").Create(ctx, ipp, metav1.CreateOptions{}); cErr != nil {
-			o.logger.Warn("create ipaddresspool failed", slog.Any("error", cErr))
-		} else {
-			o.logger.Info("ipaddresspool created", slog.String("pool", ipPool))
-		}
+	if err := upsertClusterResource(ctx, dyn, ciliumLBPoolGVR, vipasLBPoolName, pool); err != nil {
+		return fmt.Errorf("ensure cilium lb pool: %w", err)
 	}
 
-	// Create L2Advertisement for layer2 operation (if not present)
-	l2Name := "vipas-l2"
-	l2 := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "metallb.io/v1beta1",
-		"kind":       "L2Advertisement",
+	if lbType == "cilium-l2" {
+		l2 := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "cilium.io/v2alpha1",
+			"kind":       "CiliumL2AnnouncementPolicy",
+			"metadata": map[string]interface{}{
+				"name": vipasL2PolicyName,
+				"labels": map[string]interface{}{
+					managedByLabel: managedByLabelValue,
+				},
+			},
+			"spec": map[string]interface{}{
+				"serviceSelector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						managedByLabel: managedByLabelValue,
+					},
+				},
+				"loadBalancerIPs": true,
+			},
+		}}
+		if err := upsertClusterResource(ctx, dyn, ciliumL2PolicyGVR, vipasL2PolicyName, l2); err != nil {
+			return fmt.Errorf("ensure cilium l2 announcement policy: %w", err)
+		}
+		_ = deleteClusterResourceIfExists(ctx, dyn, ciliumBGPPeeringGVR, vipasBGPPolicyName)
+		o.logger.Info("configured cilium l2 load balancer", slog.String("pool", ipPool))
+		return nil
+	}
+
+	// cilium-bgp mode: create a managed peering policy shell and expect operators
+	// to update neighbors/local ASN if their topology differs.
+	bgp := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "cilium.io/v2alpha1",
+		"kind":       "CiliumBGPPeeringPolicy",
 		"metadata": map[string]interface{}{
-			"name":      l2Name,
-			"namespace": "metallb-system",
-			"labels":    map[string]interface{}{"app.kubernetes.io/managed-by": "vipas"},
+			"name": vipasBGPPolicyName,
+			"labels": map[string]interface{}{
+				managedByLabel: managedByLabelValue,
+			},
 		},
-		"spec": map[string]interface{}{},
+		"spec": map[string]interface{}{
+			"virtualRouters": []interface{}{
+				map[string]interface{}{
+					"localASN": defaultCiliumLocalASN,
+					"serviceSelector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							managedByLabel: managedByLabelValue,
+						},
+					},
+					"neighbors": []interface{}{},
+				},
+			},
+		},
 	}}
-	if _, err := dyn.Resource(l2AdvGVR).Namespace("metallb-system").Get(ctx, l2Name, metav1.GetOptions{}); err != nil {
-		if _, cErr := dyn.Resource(l2AdvGVR).Namespace("metallb-system").Create(ctx, l2, metav1.CreateOptions{}); cErr != nil {
-			o.logger.Warn("create l2advertisement failed", slog.Any("error", cErr))
-		} else {
-			o.logger.Info("l2advertisement created")
-		}
+	if err := upsertClusterResource(ctx, dyn, ciliumBGPPeeringGVR, vipasBGPPolicyName, bgp); err != nil {
+		return fmt.Errorf("ensure cilium bgp peering policy: %w", err)
 	}
-
+	_ = deleteClusterResourceIfExists(ctx, dyn, ciliumL2PolicyGVR, vipasL2PolicyName)
+	o.logger.Info("configured cilium bgp load balancer", slog.String("pool", ipPool))
 	return nil
 }
 
@@ -89,11 +138,26 @@ func (o *Orchestrator) GetLoadBalancerStatus(ctx context.Context) (*orchestrator
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
 
-	// List IPAddressPools
-	pools, _ := dyn.Resource(ipPoolGVR).Namespace("metallb-system").List(ctx, metav1.ListOptions{})
+	// List configured Cilium LB pools.
+	pools, _ := dyn.Resource(ciliumLBPoolGVR).List(ctx, metav1.ListOptions{})
 	var poolNames []string
-	for _, p := range pools.Items {
-		poolNames = append(poolNames, p.GetName())
+	if pools != nil {
+		for _, p := range pools.Items {
+			blocks, found, _ := unstructured.NestedSlice(p.Object, "spec", "blocks")
+			if !found || len(blocks) == 0 {
+				poolNames = append(poolNames, p.GetName())
+				continue
+			}
+			for _, b := range blocks {
+				bMap, ok := b.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if cidr, ok := bMap["cidr"].(string); ok && strings.TrimSpace(cidr) != "" {
+					poolNames = append(poolNames, cidr)
+				}
+			}
+		}
 	}
 
 	// Find Services of type LoadBalancer and collect assigned IPs
@@ -101,60 +165,126 @@ func (o *Orchestrator) GetLoadBalancerStatus(ctx context.Context) (*orchestrator
 	if err != nil {
 		return nil, fmt.Errorf("list services: %w", err)
 	}
+	seenAssigned := map[string]struct{}{}
 	var assigned []string
 	for _, s := range svcList.Items {
 		if s.Spec.Type == "LoadBalancer" {
 			for _, ing := range s.Status.LoadBalancer.Ingress {
 				if ing.IP != "" {
-					assigned = append(assigned, ing.IP)
+					if _, ok := seenAssigned[ing.IP]; !ok {
+						assigned = append(assigned, ing.IP)
+						seenAssigned[ing.IP] = struct{}{}
+					}
 				}
 				if ing.Hostname != "" {
-					assigned = append(assigned, ing.Hostname)
+					if _, ok := seenAssigned[ing.Hostname]; !ok {
+						assigned = append(assigned, ing.Hostname)
+						seenAssigned[ing.Hostname] = struct{}{}
+					}
 				}
 			}
 		}
 	}
 
-	// List BGPPeers (if any)
+	// List BGP peers from CiliumBGPPeeringPolicy.
 	var peers []orchestrator.BGPPeerInfo
-	if bpList, err := dyn.Resource(bgpPeerGVR).Namespace("metallb-system").List(ctx, metav1.ListOptions{}); err == nil {
+	bgpPolicyCount := 0
+	if bpList, err := dyn.Resource(ciliumBGPPeeringGVR).List(ctx, metav1.ListOptions{}); err == nil {
+		bgpPolicyCount = len(bpList.Items)
 		for _, it := range bpList.Items {
-			spec := it.Object["spec"]
-			var peerAddr string
-			var peerASN int64
-			var srcAddr string
-			if specMap, ok := spec.(map[string]interface{}); ok {
-				if v, ok := specMap["peerAddress"]; ok {
-					if s, ok := v.(string); ok {
-						peerAddr = s
-					}
+			vRouters, found, _ := unstructured.NestedSlice(it.Object, "spec", "virtualRouters")
+			if !found {
+				continue
+			}
+			for _, vr := range vRouters {
+				vrMap, ok := vr.(map[string]interface{})
+				if !ok {
+					continue
 				}
-				if v, ok := specMap["peerASN"]; ok {
-					switch val := v.(type) {
-					case int64:
-						peerASN = val
-					case int:
-						peerASN = int64(val)
-					case float64:
-						peerASN = int64(val)
+				neighbors, _ := vrMap["neighbors"].([]interface{})
+				for i, n := range neighbors {
+					nMap, ok := n.(map[string]interface{})
+					if !ok {
+						continue
 					}
-				}
-				if v, ok := specMap["sourceAddress"]; ok {
-					if s, ok := v.(string); ok {
-						srcAddr = s
-					}
+					peerAddr, _ := nMap["peerAddress"].(string)
+					peerASN := toInt64(nMap["peerASN"])
+					srcAddr, _ := nMap["sourceAddress"].(string)
+					peers = append(peers, orchestrator.BGPPeerInfo{
+						Name:        fmt.Sprintf("%s-%d", it.GetName(), i),
+						PeerAddress: peerAddr,
+						PeerASN:     peerASN,
+						SourceAddr:  srcAddr,
+					})
 				}
 			}
-			peers = append(peers, orchestrator.BGPPeerInfo{
-				Name:        it.GetName(),
-				PeerAddress: peerAddr,
-				PeerASN:     peerASN,
-				SourceAddr:  srcAddr,
-			})
 		}
 	}
 
-	return &orchestrator.LBStatus{Type: "metallb", IPPools: poolNames, AssignedIPs: assigned, BGPPeers: peers}, nil
+	l2PolicyCount := 0
+	if l2List, err := dyn.Resource(ciliumL2PolicyGVR).List(ctx, metav1.ListOptions{}); err == nil {
+		l2PolicyCount = len(l2List.Items)
+	}
+
+	lbType := "nodeport"
+	if bgpPolicyCount > 0 || len(peers) > 0 {
+		lbType = "cilium-bgp"
+	} else if l2PolicyCount > 0 {
+		lbType = "cilium-l2"
+	}
+
+	return &orchestrator.LBStatus{Type: lbType, IPPools: poolNames, AssignedIPs: assigned, BGPPeers: peers}, nil
+}
+
+func normalizeLBType(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	switch v {
+	case "", "nodeport", "cilium-l2", "cilium-bgp":
+		return v
+	case "l2", "cilium-l2-announcement":
+		return "cilium-l2"
+	case "bgp", "cilium", "metallb":
+		return "cilium-bgp"
+	default:
+		return v
+	}
+}
+
+func upsertClusterResource(ctx context.Context, dyn dynamic.Interface, gvr schema.GroupVersionResource, name string, obj *unstructured.Unstructured) error {
+	current, err := dyn.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			_, createErr := dyn.Resource(gvr).Create(ctx, obj, metav1.CreateOptions{})
+			return createErr
+		}
+		return err
+	}
+	obj.SetResourceVersion(current.GetResourceVersion())
+	_, err = dyn.Resource(gvr).Update(ctx, obj, metav1.UpdateOptions{})
+	return err
+}
+
+func deleteClusterResourceIfExists(ctx context.Context, dyn dynamic.Interface, gvr schema.GroupVersionResource, name string) error {
+	err := dyn.Resource(gvr).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func toInt64(v interface{}) int64 {
+	switch x := v.(type) {
+	case int64:
+		return x
+	case int32:
+		return int64(x)
+	case int:
+		return int64(x)
+	case float64:
+		return int64(x)
+	default:
+		return 0
+	}
 }
 
 // Ensure k8s compile-time check for interface

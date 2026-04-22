@@ -19,6 +19,7 @@ import (
 var (
 	gatewayClassGVR = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"}
 	gatewayGVR      = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"}
+	envoyProxyGVR   = schema.GroupVersionResource{Group: "gateway.envoyproxy.io", Version: "v1alpha1", Resource: "envoyproxies"}
 )
 
 // intstrFromInt is a tiny helper to avoid importing intstr in multiple places.
@@ -37,25 +38,39 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 		return fmt.Errorf("ensure gateway ns: %w", err)
 	}
 
+	if err := o.ensureEnvoyProxy(ctx, dyn); err != nil {
+		return fmt.Errorf("ensure envoyproxy: %w", err)
+	}
+
 	// GatewayClass
 	gcName := "envoy-gateway"
-	_, err = dyn.Resource(gatewayClassGVR).Get(ctx, gcName, metav1.GetOptions{})
-	if err != nil {
-		// Create minimal GatewayClass
-		gc := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "gateway.networking.k8s.io/v1",
-			"kind":       "GatewayClass",
-			"metadata": map[string]interface{}{
-				"name": gcName,
+	gcObj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "GatewayClass",
+		"metadata": map[string]interface{}{
+			"name": gcName,
+		},
+		"spec": map[string]interface{}{
+			"controllerName": "gateway.envoyproxy.io/gatewayclass-controller",
+			"parametersRef": map[string]interface{}{
+				"group":     "gateway.envoyproxy.io",
+				"kind":      "EnvoyProxy",
+				"name":      "vipas-proxy",
+				"namespace": "gateway-system",
 			},
-			"spec": map[string]interface{}{
-				"controllerName": "gateway.envoyproxy.io/gatewayclass-controller",
-			},
-		}}
-		if _, createErr := dyn.Resource(gatewayClassGVR).Create(ctx, gc, metav1.CreateOptions{}); createErr != nil {
+		},
+	}}
+	existingGC, gcErr := dyn.Resource(gatewayClassGVR).Get(ctx, gcName, metav1.GetOptions{})
+	if gcErr != nil {
+		if _, createErr := dyn.Resource(gatewayClassGVR).Create(ctx, gcObj, metav1.CreateOptions{}); createErr != nil {
 			o.logger.Warn("create gatewayclass failed", slog.Any("error", createErr))
 		} else {
 			o.logger.Info("gatewayclass created", slog.String("name", gcName))
+		}
+	} else {
+		gcObj.SetResourceVersion(existingGC.GetResourceVersion())
+		if _, updateErr := dyn.Resource(gatewayClassGVR).Update(ctx, gcObj, metav1.UpdateOptions{}); updateErr != nil {
+			o.logger.Warn("update gatewayclass failed", slog.Any("error", updateErr))
 		}
 	}
 
@@ -100,7 +115,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 	}
 	o.logger.Info("gateway created", slog.String("name", gwName))
 
-	// Ensure Envoy dataplane service is exposed as a LoadBalancer so MetalLB can assign
+	// Ensure Envoy dataplane service is exposed as a LoadBalancer so Cilium can assign
 	// an external IP reachable from the host. The dataplane runs in namespace
 	// `envoy-gateway-system` and pods are owned by the Gateway controller with labels
 	// `gateway.envoyproxy.io/owning-gateway-name=vipas-gateway` and
@@ -141,10 +156,125 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 	return nil
 }
 
+func (o *Orchestrator) ensureEnvoyProxy(ctx context.Context, dyn dynamic.Interface) error {
+	nodes, err := o.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list nodes: %w", err)
+	}
+
+	hasGatewayNodes := false
+	for _, n := range nodes.Items {
+		if n.Labels["vipas/pool"] == "gateway" {
+			hasGatewayNodes = true
+			break
+		}
+	}
+
+	obj := defaultEnvoyProxyObj()
+	if hasGatewayNodes {
+		obj = gatewayNodesEnvoyProxyObj()
+	}
+
+	current, err := dyn.Resource(envoyProxyGVR).Namespace("gateway-system").Get(ctx, "vipas-proxy", metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			if _, createErr := dyn.Resource(envoyProxyGVR).Namespace("gateway-system").Create(ctx, obj, metav1.CreateOptions{}); createErr != nil {
+				return createErr
+			}
+			o.logger.Info("envoyproxy created", slog.Bool("gateway_nodes", hasGatewayNodes))
+			return nil
+		}
+		return err
+	}
+
+	obj.SetResourceVersion(current.GetResourceVersion())
+	if _, err := dyn.Resource(envoyProxyGVR).Namespace("gateway-system").Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	o.logger.Info("envoyproxy updated", slog.Bool("gateway_nodes", hasGatewayNodes))
+	return nil
+}
+
+func defaultEnvoyProxyObj() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.envoyproxy.io/v1alpha1",
+		"kind":       "EnvoyProxy",
+		"metadata": map[string]interface{}{
+			"name":      "vipas-proxy",
+			"namespace": "gateway-system",
+		},
+		"spec": map[string]interface{}{
+			"provider": map[string]interface{}{
+				"type": "Kubernetes",
+				"kubernetes": map[string]interface{}{
+					"envoyDeployment": map[string]interface{}{
+						"patch": map[string]interface{}{
+							"type": "StrategicMerge",
+							"value": map[string]interface{}{
+								"spec": map[string]interface{}{
+									"strategy": map[string]interface{}{"type": "Recreate"},
+									"template": map[string]interface{}{
+										"spec": map[string]interface{}{
+											"hostNetwork": true,
+											"dnsPolicy":   "ClusterFirstWithHostNet",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}}
+}
+
+func gatewayNodesEnvoyProxyObj() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.envoyproxy.io/v1alpha1",
+		"kind":       "EnvoyProxy",
+		"metadata": map[string]interface{}{
+			"name":      "vipas-proxy",
+			"namespace": "gateway-system",
+		},
+		"spec": map[string]interface{}{
+			"provider": map[string]interface{}{
+				"type": "Kubernetes",
+				"kubernetes": map[string]interface{}{
+					"envoyDaemonSet": map[string]interface{}{
+						"patch": map[string]interface{}{
+							"type": "StrategicMergePatch",
+							"value": map[string]interface{}{
+								"spec": map[string]interface{}{
+									"template": map[string]interface{}{
+										"spec": map[string]interface{}{
+											"nodeSelector": map[string]interface{}{
+												"vipas/pool": "gateway",
+											},
+											"tolerations": []interface{}{
+												map[string]interface{}{
+													"key":    "role",
+													"value":  "gateway",
+													"effect": "NoSchedule",
+												},
+											},
+											"hostNetwork": true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}}
+}
+
 // EnsureGateway implements orchestrator.GatewayManager (declared for compile-time check)
 var _ orchestrator.GatewayManager = (*Orchestrator)(nil)
 
-// GetGatewayIP returns the external IP assigned by MetalLB to the Envoy Gateway.
+// GetGatewayIP returns the external IP assigned to the Envoy Gateway.
 // It reads the status.addresses field of the "vipas-gateway" Gateway resource.
 // Returns an empty string (no error) when the Gateway has no address yet.
 func (o *Orchestrator) GetGatewayIP(ctx context.Context) (string, error) {

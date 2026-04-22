@@ -15,7 +15,7 @@
 | **CNI** | Cilium (eBPF) | Cilium (eBPF) |
 | **Gateway** | Envoy Gateway + `HTTPRoute` | Envoy Gateway + `HTTPRoute` |
 | **TLS** | cert-manager (self-signed / sslip.io sin TLS) | cert-manager + Let's Encrypt |
-| **Load Balancer** | NodePort directo (1 nodo) | MetalLB BGP o Cilium BGP |
+| **Load Balancer** | Cilium L2 Announcement | Cilium BGP |
 | **Storage** | `local-path` de K3s | Longhorn (replicado ×3) |
 | **PostgreSQL** | StatefulSet simple | CloudNativePG (HA) |
 | **Control Plane HA** | No (1 nodo) | Sí (quorum etcd 3 nodos) |
@@ -226,25 +226,30 @@
 
 ## Fase 3 — Load Balancer (prod: bare-metal multi-nodo)
 
-> En dev con 1 nodo el gateway escucha en NodePort. En prod se añade un LB real.
+> Implementación elegida: **solo Cilium**.
+> En dev (single-node) se usa **Cilium L2 Announcement**. En prod (multi-node) se usa **Cilium BGP**.
 
-- [ ] **3.1** Elegir implementación:
-  - [ ] **3.1.a** **MetalLB en modo BGP** — más maduro, amplia compatibilidad
-  - [ ] **3.1.b** **Cilium BGP** — menos piezas (ya tenemos Cilium)
-- [ ] **3.2** Instalar MetalLB (si opción A):
-  ```bash
-  helm install metallb metallb/metallb -n metallb-system --create-namespace
-  ```
-- [ ] **3.3** Crear `IPAddressPool` con el rango de IPs públicas disponibles
-- [ ] **3.4** Crear `BGPPeer` apuntando al router upstream (o `L2Advertisement` si no hay BGP)
+- [x] **3.1** Elegir implementación:
+  - [x] **3.1.a** Eliminar MetalLB del flujo de instalación y de manifiestos
+  - [x] **3.1.b** Estándar único en Cilium: `cilium-l2` (dev) / `cilium-bgp` (prod)
+- [x] **3.2** Configurar Cilium LB en instalación:
+  - `install.sh` ahora aplica recursos de Cilium LB y autodetecta modo según topología (número de nodos)
+  - Si `LB_TYPE` no está definido: `cilium-l2` en dev, `cilium-bgp` en prod
+- [x] **3.3** Crear `CiliumLoadBalancerIPPool` con el rango de IPs públicas disponibles
+- [x] **3.4** Configuración de anuncio:
+  - Dev: `CiliumL2AnnouncementPolicy`
+  - Prod: `CiliumBGPPeeringPolicy` (requiere `BGP_PEER_ADDRESS` y `BGP_PEER_ASN`)
 - [ ] **3.5** Configurar ECMP en el router upstream para distribuir tráfico entre nodos gateway
-- [ ] **3.6** Añadir al modelo `Setting` las claves:
-  - `lb_type` → `nodeport | metallb | cilium-bgp`
+  - Pendiente de infraestructura externa (router físico/virtual)
+- [x] **3.6** Ajustar modelo `Setting` para Cilium LB:
+  - `lb_type` → `cilium-l2 | cilium-bgp | nodeport`
   - `lb_ip_pool` → rango CIDR del pool de IPs
-- [ ] **3.7** Actualizar `setting_service.go` para gestionar la configuración del LB
-- [ ] **3.8** Añadir endpoint `GET /api/v1/infra/lb/status` — IPs asignadas, peers BGP
-
-Note: MetalLB installation and IP pool manifest have been added to the installer. See `install.sh` and `deploy/manifests/metallb-ip-pool.yaml`.
+- [x] **3.7** Actualizar `setting_service.go` para gestionar la configuración del LB
+  - Normaliza valores legacy (`metallb` -> `cilium-bgp`)
+  - Valida tipos permitidos
+  - Infiera y persiste modo por topología cuando no existe `lb_type`
+- [x] **3.8** Endpoint `GET /api/v1/infra/lb/status`
+  - Reporta IPs asignadas, pools de Cilium y peers BGP detectados
 
 ---
 
@@ -252,12 +257,13 @@ Note: MetalLB installation and IP pool manifest have been added to the installer
 
 > En dev el gateway corre con el resto. En prod se aísla en nodos dedicados.
 
-- [ ] **4.1** Añadir `role = "gateway"` al modelo `ServerNode`:
-  - Migración de BD: valores posibles → `worker | server | control-plane | gateway`
-- [ ] **4.2** Actualizar `node_service.go` → al registrar un nodo con `role=gateway`:
-  - Aplicar taint `role=gateway:NoSchedule` vía SSH + kubectl
+- [x] **4.1** Añadir `role = "gateway"` al modelo `ServerNode`:
+  - Migración de BD añadida para roles permitidos: `worker | server | control-plane | gateway`
+- [x] **4.2** Actualizar `node_service.go` → al registrar un nodo con `role=gateway`:
+  - Aplicar taint `role=gateway:NoSchedule`
   - Aplicar label `vipas/pool=gateway`
-- [ ] **4.3** Crear `EnvoyProxy` custom resource para fijar el DaemonSet de Envoy en nodos gateway:
+  - Si el rol no es gateway, retirar taint/label de gateway para evitar deriva
+- [x] **4.3** Crear `EnvoyProxy` custom resource para fijar el DaemonSet de Envoy en nodos gateway:
   ```yaml
   apiVersion: gateway.envoyproxy.io/v1alpha1
   kind: EnvoyProxy
@@ -283,9 +289,11 @@ Note: MetalLB installation and IP pool manifest have been added to the installer
                         effect: NoSchedule
                     hostNetwork: true
   ```
-- [ ] **4.4** Referenciar `EnvoyProxy` desde el `GatewayClass`
-- [ ] **4.5** Añadir en la UI del panel sección "Nodos Gateway" separada de "Workers"
-- [ ] **4.6** Asegurar que los workers NO toleran el taint `role=gateway`
+- [x] **4.4** Referenciar `EnvoyProxy` desde el `GatewayClass`
+- [x] **4.5** Añadir en la UI del panel sección "Nodos Gateway" separada de "Workers"
+- [x] **4.6** Asegurar que los workers NO toleran el taint `role=gateway`
+  - Solo el `EnvoyProxy` para gateway incluye toleration explícita
+  - Los despliegues de apps/workers no añaden esa toleration
 
 ---
 
@@ -293,21 +301,21 @@ Note: MetalLB installation and IP pool manifest have been added to the installer
 
 > En dev hay 1 nodo de control plane. En prod se añaden 2 más para quorum etcd.
 
-- [ ] **5.1** Elegir distribución:
-  - [ ] **5.1.a** **K3s HA** — embedded etcd (`--cluster-init` en el primero, `--server` en los demás)
+- [x] **5.1** Elegir distribución:
+  - [x] **5.1.a** **K3s HA** — embedded etcd (`--cluster-init` en el primero, `--server` en los demás)
   - [ ] **5.1.b** **RKE2** — hardening CIS, SELinux, sin HelmChart CRD propio de K3s
-- [ ] **5.2** Añadir `role = "control-plane"` al modelo `ServerNode`:
+- [x] **5.2** Añadir `role = "control-plane"` al modelo `ServerNode`:
   - Migración de BD: valores → `worker | server | control-plane | gateway`
-- [ ] **5.3** Actualizar `node_service.go` para gestionar el join de nodos `control-plane` con el flag `--server`
-- [ ] **5.4** Actualizar `install.sh` para soportar el modo HA:
+- [x] **5.3** Actualizar `node_service.go` para gestionar el join de nodos `control-plane` con el flag `--server`
+- [x] **5.4** Actualizar `install.sh` para soportar el modo HA:
   - Primer nodo: `--cluster-init`
   - Nodos adicionales control-plane: `--server https://<VIP>:6443`
-- [ ] **5.5** Configurar VIP para el API Server (puerto 6443):
-  - [ ] Opción A: `kube-vip` en modo control-plane (recomendado bare-metal)
+- [x] **5.5** Configurar VIP para el API Server (puerto 6443):
+  - [x] Opción A: `kube-vip` en modo control-plane (recomendado bare-metal)
   - [ ] Opción B: HAProxy + Keepalived
-- [ ] **5.6** Actualizar `kubeconfig/kubeconfig.yaml` para apuntar al VIP
-- [ ] **5.7** Validar que `cluster.go` → `GetNodes()` muestra los 3 nodos con rol `control-plane`
-- [ ] **5.8** Añadir en la UI badge con estado del quorum etcd (nodos activos / total)
+- [x] **5.6** Actualizar `kubeconfig/kubeconfig.yaml` para apuntar al VIP
+- [x] **5.7** Validar que `cluster.go` → `GetNodes()` muestra los 3 nodos con rol `control-plane`
+- [x] **5.8** Añadir en la UI badge con estado del quorum etcd (nodos activos / total)
 
 ---
 
@@ -465,7 +473,7 @@ Note: MetalLB installation and IP pool manifest have been added to the installer
 ```
 Fase 1  Stack base (K3s + Cilium + Envoy Gateway + cert-manager)
   └─► Fase 2  Código Go: IngressManager → GatewayManager
-        ├─► Fase 3  Load Balancer (prod: MetalLB/Cilium BGP)
+        ├─► Fase 3  Load Balancer (prod: Cilium BGP)
         │     └─► Fase 4  Nodos Gateway dedicados
         ├─► Fase 5  Control Plane HA (3 nodos etcd)
         ├─► Fase 6  Cilium red avanzada
@@ -493,7 +501,7 @@ Fase 3   ──► Fase 13  Documentación y runbooks
 | Gateway Controller | Envoy Gateway | ✓ | ✓ (nodos dedicados) |
 | Gateway dataplane | Envoy Proxy | 1 pod | DaemonSet en nodos GW |
 | TLS | cert-manager | self-signed / sin TLS (sslip.io) | Let's Encrypt prod |
-| Load Balancer | — | NodePort | MetalLB BGP / Cilium BGP |
+| Load Balancer | — | Cilium L2 Announcement | Cilium BGP |
 | DNS automático | external-dns | no (sslip.io manual) | ✓ |
 | Network Policy | CiliumNetworkPolicy | básica | L3/L4/L7 + FQDN egress |
 | Observabilidad | Prometheus + Grafana | opcional | ✓ |

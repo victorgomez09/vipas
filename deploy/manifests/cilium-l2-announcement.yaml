@@ -1,0 +1,11 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: vipas-l2-announcement
+  labels:
+    app.kubernetes.io/managed-by: vipas
+spec:
+  serviceSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: vipas
+  loadBalancerIPs: true

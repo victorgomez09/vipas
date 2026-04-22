@@ -2,7 +2,7 @@ apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
   name: vipas-proxy
-  namespace: envoy-gateway-system
+  namespace: gateway-system
 spec:
   provider:
     type: Kubernetes

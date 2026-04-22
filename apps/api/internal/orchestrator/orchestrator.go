@@ -98,7 +98,7 @@ type GatewayManager interface {
 	EnsurePanelHTTPRoute(ctx context.Context, domain, httpsEmail string) error
 	DeletePanelHTTPRoute(ctx context.Context) error
 	SyncHTTPRoutePorts(ctx context.Context, app *model.Application) error
-	// GetGatewayIP returns the external IP assigned by MetalLB to the Envoy Gateway.
+	// GetGatewayIP returns the external IP assigned to the Envoy Gateway.
 	// Returns an empty string (no error) when the gateway has no address yet.
 	GetGatewayIP(ctx context.Context) (string, error)
 }
@@ -149,7 +149,7 @@ type NetworkPolicyManager interface {
 }
 
 // LoadBalancerManager handles installation and status reporting for cluster
-// load balancer implementations like MetalLB or Cilium BGP.
+// load balancer implementations like Cilium BGP or Cilium L2 announcement.
 type LoadBalancerManager interface {
 	EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error
 	GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error)
@@ -158,6 +158,7 @@ type LoadBalancerManager interface {
 // ClusterInspector provides cluster-wide information.
 type ClusterInspector interface {
 	GetNodes(ctx context.Context) ([]NodeInfo, error)
+	GetEtcdQuorumStatus(ctx context.Context) (*EtcdQuorumStatus, error)
 	GetClusterMetrics(ctx context.Context) (*ClusterMetrics, error)
 	GetNamespaceMetrics(ctx context.Context, namespace string) (*ResourceMetrics, error)
 	GetAllPods(ctx context.Context) ([]PodInfo, error)
@@ -168,6 +169,8 @@ type ClusterInspector interface {
 	GetClusterTopology(ctx context.Context) (*ClusterTopology, error)
 	SetNodeLabel(ctx context.Context, nodeName, key, value string) error
 	RemoveNodeLabel(ctx context.Context, nodeName, key string) error
+	SetNodeTaint(ctx context.Context, nodeName, key, value, effect string) error
+	RemoveNodeTaint(ctx context.Context, nodeName, key, effect string) error
 	GetNodePools(ctx context.Context) ([]string, error)
 }
 
@@ -188,12 +191,21 @@ type LBStatus struct {
 	BGPPeers    []BGPPeerInfo `json:"bgp_peers,omitempty"`
 }
 
-// BGPPeerInfo reports a configured MetalLB BGPPeer.
+// BGPPeerInfo reports a configured BGP peer for the active LB implementation.
 type BGPPeerInfo struct {
 	Name        string `json:"name"`
 	PeerAddress string `json:"peer_address"`
 	PeerASN     int64  `json:"peer_asn"`
 	SourceAddr  string `json:"source_address,omitempty"`
+}
+
+// EtcdQuorumStatus reports quorum state for K3s embedded etcd control-plane.
+type EtcdQuorumStatus struct {
+	TotalControlPlanes int    `json:"total_control_planes"`
+	ReadyControlPlanes int    `json:"ready_control_planes"`
+	QuorumRequired     int    `json:"quorum_required"`
+	HasQuorum          bool   `json:"has_quorum"`
+	Strategy           string `json:"strategy"`
 }
 
 type TopologyNode struct {

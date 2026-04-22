@@ -89,6 +89,15 @@ func (h *ClusterHandler) GetNodeMetrics(c *gin.Context) {
 	httputil.RespondList(c, metrics)
 }
 
+func (h *ClusterHandler) GetEtcdQuorumStatus(c *gin.Context) {
+	status, err := h.orch.GetEtcdQuorumStatus(c.Request.Context())
+	if err != nil {
+		httputil.RespondError(c, err)
+		return
+	}
+	httputil.RespondOK(c, status)
+}
+
 func (h *ClusterHandler) GetTopology(c *gin.Context) {
 	topo, err := h.orch.GetClusterTopology(c.Request.Context())
 	if err != nil {

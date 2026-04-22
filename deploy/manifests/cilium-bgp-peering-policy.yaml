@@ -1,0 +1,15 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumBGPPeeringPolicy
+metadata:
+  name: vipas-bgp-peering
+  labels:
+    app.kubernetes.io/managed-by: vipas
+spec:
+  virtualRouters:
+    - localASN: ${BGP_LOCAL_ASN}
+      serviceSelector:
+        matchLabels:
+          app.kubernetes.io/managed-by: vipas
+      neighbors:
+        - peerAddress: ${BGP_PEER_ADDRESS}
+          peerASN: ${BGP_PEER_ASN}

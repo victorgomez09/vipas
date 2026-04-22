@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/victorgomez09/vipas/apps/api/internal/model"
@@ -42,7 +43,7 @@ func (s *SettingService) InitDefaults(ctx context.Context) error {
 
 		existing, _ := s.store.Settings().Get(ctx, model.SettingBaseDomain)
 		if existing == "" {
-			// Prefer MetalLB VIP as the base domain anchor when available.
+			// Prefer the gateway external IP as the base domain anchor when available.
 			baseDomainIP := ip
 			if gwIP := s.detectGatewayIP(ctx); gwIP != "" {
 				baseDomainIP = gwIP
@@ -61,7 +62,7 @@ func (s *SettingService) InitDefaults(ctx context.Context) error {
 // This ensures panel ingress, HTTPS redirect middleware, and other K8s
 // resources survive restarts, accidental deletions, or cleanup operations.
 func (s *SettingService) ReconcileInfra(ctx context.Context) {
-	// Refresh the MetalLB VIP assigned to the Envoy Gateway on every boot.
+	// Refresh the current external IP assigned to the Envoy Gateway on every boot.
 	if gwIP := s.detectGatewayIP(ctx); gwIP != "" {
 		if err := s.store.Settings().Set(ctx, model.SettingGatewayIP, gwIP); err != nil {
 			s.logger.Warn("reconcile: failed to store gateway IP", slog.Any("error", err))
@@ -81,7 +82,7 @@ func (s *SettingService) getPanelDomain(ctx context.Context) string {
 	return val
 }
 
-// detectGatewayIP queries the Envoy Gateway's status to get the MetalLB-assigned VIP.
+// detectGatewayIP queries the Envoy Gateway status to get its current external IP.
 // Returns an empty string when the gateway is not yet ready or not running on k3s.
 func (s *SettingService) detectGatewayIP(ctx context.Context) string {
 	ip, err := s.orch.GetGatewayIP(ctx)
@@ -141,6 +142,14 @@ func (s *SettingService) Get(ctx context.Context, key string) (string, error) {
 
 func (s *SettingService) Set(ctx context.Context, key, value string) error {
 	value = strings.TrimSpace(value)
+
+	if key == model.SettingLBType {
+		normalized := normalizeLBType(value)
+		if value != "" && normalized == "" {
+			return fmt.Errorf("invalid lb_type: %q (allowed: cilium-l2, cilium-bgp, nodeport)", value)
+		}
+		value = normalized
+	}
 
 	if err := s.store.Settings().Set(ctx, key, value); err != nil {
 		return err
@@ -212,17 +221,54 @@ func (s *SettingService) applyCertIssuer(ctx context.Context, issuer string) err
 	return s.orch.EnsurePanelHTTPRoute(ctx, panelDomain, httpsEmail)
 }
 
-// applyLoadBalancerConfig applies LB settings. For MetalLB it will create the
-// IPAddressPool and L2Advertisement via the orchestrator.
+// applyLoadBalancerConfig applies LB settings. When lbType is empty it defaults
+// to cilium-l2 for single-node clusters (dev) and cilium-bgp for multi-node (prod).
 func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ipPool string) error {
 	if lbType == "" {
-		lbType = "nodeport"
+		lbType = s.defaultLBTypeByTopology(ctx)
+		if err := s.store.Settings().Set(ctx, model.SettingLBType, lbType); err != nil {
+			s.logger.Warn("failed to persist inferred lb_type", slog.Any("error", err), slog.String("lb_type", lbType))
+		}
 	}
-	if lbType == "metallb" {
-		return s.orch.EnsureLoadBalancer(ctx, lbType, ipPool)
+
+	ipPool = strings.TrimSpace(ipPool)
+	if (lbType == "cilium-l2" || lbType == "cilium-bgp") && ipPool == "" {
+		return fmt.Errorf("lb_ip_pool is required for %s", lbType)
 	}
-	// For nodeport or other unsupported types, no-op
-	return nil
+
+	return s.orch.EnsureLoadBalancer(ctx, lbType, ipPool)
+}
+
+func (s *SettingService) defaultLBTypeByTopology(ctx context.Context) string {
+	nodes, err := s.orch.GetNodes(ctx)
+	if err != nil {
+		s.logger.Debug("defaultLBTypeByTopology: could not read nodes", slog.Any("error", err))
+		return "cilium-l2"
+	}
+	if len(nodes) <= 1 {
+		return "cilium-l2"
+	}
+	return "cilium-bgp"
+}
+
+func normalizeLBType(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if v == "" {
+		return ""
+	}
+	if v == "l2" || v == "cilium-l2-announcement" {
+		return "cilium-l2"
+	}
+	if v == "bgp" || v == "cilium" {
+		return "cilium-bgp"
+	}
+	if v == "metallb" {
+		return "cilium-bgp"
+	}
+	if slices.Contains([]string{"cilium-l2", "cilium-bgp", "nodeport"}, v) {
+		return v
+	}
+	return ""
 }
 
 // SMTPConfig holds SMTP mail server settings.

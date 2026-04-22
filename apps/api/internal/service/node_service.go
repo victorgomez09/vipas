@@ -97,7 +97,7 @@ type CreateNodeInput struct {
 	AuthType string     `json:"auth_type"` // password | ssh_key
 	SSHKeyID *uuid.UUID `json:"ssh_key_id"`
 	Password string     `json:"password"`
-	Role     string     `json:"role"` // worker | server
+	Role     string     `json:"role"` // worker | server | control-plane | gateway
 }
 
 func (s *NodeService) Create(ctx context.Context, orgID uuid.UUID, input CreateNodeInput) (*model.ServerNode, error) {
@@ -141,6 +141,9 @@ func (s *NodeService) Create(ctx context.Context, orgID uuid.UUID, input CreateN
 	}
 	if node.Role == "" {
 		node.Role = "worker"
+	}
+	if !isValidNodeRole(node.Role) {
+		return nil, fmt.Errorf("invalid node role %q", node.Role)
 	}
 	if node.AuthType == "" {
 		node.AuthType = "password"
@@ -289,8 +292,13 @@ func (s *NodeService) runInitialize(node *model.ServerNode) {
 
 	// Build the install script
 	role := "agent"
-	if node.Role == "server" {
-		role = "server --server " + k3sURL + " --flannel-backend=wireguard-native"
+	if node.Role == "server" || node.Role == "control-plane" {
+		joinURL := k3sURL
+		if vip, _ := s.store.Settings().Get(ctx, model.SettingK3sAPIVIP); strings.TrimSpace(vip) != "" {
+			joinURL = fmt.Sprintf("https://%s:6443", strings.TrimSpace(vip))
+			s.broadcast(nodeID, fmt.Sprintf("Using API VIP for control-plane join: %s", joinURL))
+		}
+		role = "server --server " + joinURL + " --flannel-backend=wireguard-native"
 	}
 
 	// Sanitize shell arguments
@@ -367,14 +375,30 @@ func (s *NodeService) runInitialize(node *model.ServerNode) {
 				node.Status = model.NodeStatusReady
 				_ = s.store.ServerNodes().Update(ctx, node)
 
-				// If this node is designated as a gateway, label it so the Envoy daemonset
-				// can target it. Best-effort: ignore errors but log via broadcast.
+				// Align node labels/taints with the selected role.
 				if node.Role == "gateway" {
+					s.broadcast(nodeID, "Applying gateway node taint: role=gateway:NoSchedule")
+					if err := s.orch.SetNodeTaint(ctx, n.Name, "role", "gateway", "NoSchedule"); err != nil {
+						s.broadcast(nodeID, "Warning: failed to set node taint: "+err.Error())
+					} else {
+						s.broadcast(nodeID, "Gateway node taint applied")
+					}
+
 					s.broadcast(nodeID, "Applying gateway node label: vipas/pool=gateway")
 					if err := s.orch.SetNodeLabel(ctx, n.Name, "vipas/pool", "gateway"); err != nil {
 						s.broadcast(nodeID, "Warning: failed to set node label: "+err.Error())
 					} else {
 						s.broadcast(nodeID, "Gateway node label applied")
+					}
+				} else {
+					s.broadcast(nodeID, "Ensuring non-gateway node has no gateway taint/label")
+					if err := s.orch.RemoveNodeTaint(ctx, n.Name, "role", "NoSchedule"); err != nil {
+						s.broadcast(nodeID, "Warning: failed to remove node taint: "+err.Error())
+					}
+					if n.Pool == "gateway" {
+						if err := s.orch.RemoveNodeLabel(ctx, n.Name, "vipas/pool"); err != nil {
+							s.broadcast(nodeID, "Warning: failed to remove gateway label: "+err.Error())
+						}
 					}
 				}
 
@@ -416,6 +440,15 @@ func (s *NodeService) getK3sToken(ctx context.Context) string {
 		return ""
 	}
 	return token
+}
+
+func isValidNodeRole(role string) bool {
+	switch role {
+	case "worker", "server", "control-plane", "gateway":
+		return true
+	default:
+		return false
+	}
 }
 
 // fingerprintSHA256 returns the SHA256 fingerprint of an SSH public key.

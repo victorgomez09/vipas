@@ -224,6 +224,7 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.GET("/cluster/pvcs", cluster.GetPVCs)
 			protected.GET("/cluster/namespaces", cluster.GetNamespaces)
 			protected.GET("/cluster/node-metrics", cluster.GetNodeMetrics)
+			protected.GET("/cluster/etcd/quorum", cluster.GetEtcdQuorumStatus)
 			protected.GET("/cluster/topology", cluster.GetTopology)
 			protected.GET("/cluster/node-pools", cluster.GetNodePools)
 			protected.PUT("/cluster/nodes/:name/pool", cluster.SetNodePool)

@@ -78,6 +78,49 @@ func (o *Orchestrator) GetNodes(ctx context.Context) ([]orchestrator.NodeInfo, e
 	return result, nil
 }
 
+func (o *Orchestrator) GetEtcdQuorumStatus(ctx context.Context) (*orchestrator.EtcdQuorumStatus, error) {
+	nodes, err := o.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	totalControlPlanes := 0
+	readyControlPlanes := 0
+	for _, node := range nodes.Items {
+		isControlPlane := false
+		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; ok {
+			isControlPlane = true
+		}
+		if _, ok := node.Labels["node-role.kubernetes.io/master"]; ok {
+			isControlPlane = true
+		}
+		if !isControlPlane {
+			continue
+		}
+
+		totalControlPlanes++
+		for _, cond := range node.Status.Conditions {
+			if cond.Type == "Ready" && cond.Status == "True" {
+				readyControlPlanes++
+				break
+			}
+		}
+	}
+
+	if totalControlPlanes == 0 {
+		totalControlPlanes = 1
+	}
+	quorumRequired := (totalControlPlanes / 2) + 1
+
+	return &orchestrator.EtcdQuorumStatus{
+		TotalControlPlanes: totalControlPlanes,
+		ReadyControlPlanes: readyControlPlanes,
+		QuorumRequired:     quorumRequired,
+		HasQuorum:          readyControlPlanes >= quorumRequired,
+		Strategy:           "k3s-embedded-etcd",
+	}, nil
+}
+
 func (o *Orchestrator) GetClusterMetrics(ctx context.Context) (*orchestrator.ClusterMetrics, error) {
 	nodes, err := o.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -704,6 +747,56 @@ func (o *Orchestrator) RemoveNodeLabel(ctx context.Context, nodeName, key string
 		return err
 	}
 	delete(node.Labels, key)
+	_, err = o.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	return err
+}
+
+func (o *Orchestrator) SetNodeTaint(ctx context.Context, nodeName, key, value, effect string) error {
+	node, err := o.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	taintEffect := corev1.TaintEffect(effect)
+	updated := false
+	for i, t := range node.Spec.Taints {
+		if t.Key == key {
+			node.Spec.Taints[i].Value = value
+			node.Spec.Taints[i].Effect = taintEffect
+			node.Spec.Taints[i].TimeAdded = nil
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		node.Spec.Taints = append(node.Spec.Taints, corev1.Taint{
+			Key:    key,
+			Value:  value,
+			Effect: taintEffect,
+		})
+	}
+
+	_, err = o.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	return err
+}
+
+func (o *Orchestrator) RemoveNodeTaint(ctx context.Context, nodeName, key, effect string) error {
+	node, err := o.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	filterEffect := corev1.TaintEffect(effect)
+	filtered := make([]corev1.Taint, 0, len(node.Spec.Taints))
+	for _, t := range node.Spec.Taints {
+		if t.Key == key && (effect == "" || t.Effect == filterEffect) {
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+	node.Spec.Taints = filtered
+
 	_, err = o.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	return err
 }

@@ -23,6 +23,9 @@ spec:
         certificateRefs:
         - name: vipas-tls
           kind: Secret
+        certificateRefs:
+        - name: vipas-tls
+          kind: Secret
       allowedRoutes:
         namespaces:
           from: All

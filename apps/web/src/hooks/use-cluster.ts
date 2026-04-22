@@ -8,6 +8,7 @@ import type {
   ClusterMetrics,
   ClusterTopology,
   DaemonSetInfo,
+  EtcdQuorumStatus,
   HelmRelease,
   NamespaceInfo,
   NodeInfo,
@@ -25,6 +26,7 @@ export const clusterKeys = {
   pvcs: ["cluster", "pvcs"] as const,
   namespaces: ["cluster", "namespaces"] as const,
   nodeMetrics: ["cluster", "node-metrics"] as const,
+  etcdQuorum: ["cluster", "etcd-quorum"] as const,
   topology: ["cluster", "topology"] as const,
 };
 
@@ -81,6 +83,14 @@ export function useNodeMetrics() {
     queryKey: clusterKeys.nodeMetrics,
     queryFn: () => api.get<NodeMetrics[]>("/api/v1/cluster/node-metrics"),
     refetchInterval: 30_000,
+  });
+}
+
+export function useEtcdQuorumStatus() {
+  return useQuery({
+    queryKey: clusterKeys.etcdQuorum,
+    queryFn: () => api.get<EtcdQuorumStatus>("/api/v1/cluster/etcd/quorum"),
+    refetchInterval: 15_000,
   });
 }
 

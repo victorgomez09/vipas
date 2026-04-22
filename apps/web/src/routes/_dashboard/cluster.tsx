@@ -71,6 +71,7 @@ import {
   useClusterNodes,
   useClusterPods,
   useClusterPVCs,
+  useEtcdQuorumStatus,
   useClusterTopology,
   useDaemonSets,
   useHelmReleases,
@@ -181,6 +182,7 @@ function ClusterPage() {
   const { data: nodes, isError: nodesError } = useClusterNodes();
   const { data: metrics, isLoading: metricsLoading } = useClusterMetrics();
   const { data: nodeMetrics, isLoading: nodeMetricsLoading } = useNodeMetrics();
+  const { data: etcdQuorum } = useEtcdQuorumStatus();
   const { data: pods, isError: podsError } = useClusterPods();
   // Events tab uses its own hook (useMonitoringEvents) for persisted data
   const { data: pvcs, isError: pvcsError } = useClusterPVCs();
@@ -264,7 +266,7 @@ function ClusterPage() {
           {nodesError ? (
             <ErrorBanner message="Failed to load nodes" />
           ) : (
-            <NodesTab nodes={nodes ?? []} nodeMetrics={nodeMetrics ?? []} />
+            <NodesTab nodes={nodes ?? []} nodeMetrics={nodeMetrics ?? []} etcdQuorum={etcdQuorum} />
           )}
         </TabsContent>
         <TabsContent value="pods">
@@ -510,9 +512,11 @@ function NodeTrendCharts() {
 function NodesTab({
   nodes,
   nodeMetrics,
+  etcdQuorum,
 }: {
   nodes: ReturnType<typeof useClusterNodes>["data"] extends infer T ? NonNullable<T> : never;
   nodeMetrics: NodeMetricsType[];
+  etcdQuorum: ReturnType<typeof useEtcdQuorumStatus>["data"];
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { data: pools } = useNodePools();
@@ -538,9 +542,116 @@ function NodesTab({
     return map;
   }, [nodeMetrics]);
 
+  const gatewayNodes = useMemo(() => nodes.filter((n) => n.pool === "gateway"), [nodes]);
+  const workerNodes = useMemo(() => nodes.filter((n) => n.pool !== "gateway"), [nodes]);
+
+  const renderNodeCard = (node: (typeof nodes)[number]) => {
+    const nm = metricsMap.get(node.name);
+    const cpuPct = nm ? pctNumber(nm.cpu_used, nm.cpu_total) : 0;
+    const memPct = nm ? pctNumber(nm.mem_used, nm.mem_total) : 0;
+
+    return (
+      <Card key={node.name}>
+        <CardHeader className="flex flex-row items-start gap-3 pb-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Server className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm">{node.name}</CardTitle>
+              <Badge variant={statusVariant(node.status)}>{node.status}</Badge>
+              {node.pool === "gateway" && (
+                <Badge variant="warning" className="text-xs">
+                  gateway
+                </Badge>
+              )}
+              {node.roles.map((r) => (
+                <Badge key={r} variant="outline" className="text-xs">
+                  {r}
+                </Badge>
+              ))}
+            </div>
+            <CardDescription className="text-xs">
+              {node.ip} · {node.version} · {node.os}/{node.arch}
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Cpu className="h-3 w-3" /> CPU
+                </span>
+                <span>
+                  {nm?.cpu_used || "N/A"} / {nm?.cpu_total || node.resources.cpu_total} ({cpuPct}
+                  %)
+                </span>
+              </div>
+              <ProgressBar value={cpuPct} />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <MemoryStick className="h-3 w-3" /> Memory
+                </span>
+                <span>
+                  {nm?.mem_used || "N/A"} / {nm?.mem_total || node.resources.mem_total} ({memPct}
+                  %)
+                </span>
+              </div>
+              <ProgressBar value={memPct} />
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Box className="h-3 w-3" /> {nm?.pod_count ?? 0} pods
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t pt-3">
+            <span className="text-xs text-muted-foreground">Node Pool</span>
+            <Select
+              value={node.pool || "none"}
+              onValueChange={(v) =>
+                setNodePool.mutate({ nodeName: node.name, pool: v === "none" ? "" : v })
+              }
+            >
+              <SelectTrigger className="h-7 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No pool</SelectItem>
+                {[
+                  ...new Set([
+                    ...(pools ?? []),
+                    "default",
+                    "production",
+                    "development",
+                    "testing",
+                    "build",
+                    "gateway",
+                  ]),
+                ].map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="mt-3 space-y-3">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        {etcdQuorum ? (
+          <Badge variant={etcdQuorum.has_quorum ? "success" : "destructive"}>
+            etcd quorum {etcdQuorum.ready_control_planes}/{etcdQuorum.total_control_planes}
+          </Badge>
+        ) : (
+          <Badge variant="secondary">etcd quorum n/a</Badge>
+        )}
         <Button size="sm" onClick={() => setSheetOpen(true)}>
           <Plus className="h-4 w-4" /> Add Node
         </Button>
@@ -554,96 +665,20 @@ function NodesTab({
           onAction={() => setSheetOpen(true)}
         />
       ) : (
-        nodes.map((node) => {
-          const nm = metricsMap.get(node.name);
-          const cpuPct = nm ? pctNumber(nm.cpu_used, nm.cpu_total) : 0;
-          const memPct = nm ? pctNumber(nm.mem_used, nm.mem_total) : 0;
-
-          return (
-            <Card key={node.name}>
-              <CardHeader className="flex flex-row items-start gap-3 pb-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Server className="h-4 w-4 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm">{node.name}</CardTitle>
-                    <Badge variant={statusVariant(node.status)}>{node.status}</Badge>
-                    {node.roles.map((r) => (
-                      <Badge key={r} variant="outline" className="text-xs">
-                        {r}
-                      </Badge>
-                    ))}
-                  </div>
-                  <CardDescription className="text-xs">
-                    {node.ip} · {node.version} · {node.os}/{node.arch}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Cpu className="h-3 w-3" /> CPU
-                      </span>
-                      <span>
-                        {nm?.cpu_used || "N/A"} / {nm?.cpu_total || node.resources.cpu_total} (
-                        {cpuPct}%)
-                      </span>
-                    </div>
-                    <ProgressBar value={cpuPct} />
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <MemoryStick className="h-3 w-3" /> Memory
-                      </span>
-                      <span>
-                        {nm?.mem_used || "N/A"} / {nm?.mem_total || node.resources.mem_total} (
-                        {memPct}%)
-                      </span>
-                    </div>
-                    <ProgressBar value={memPct} />
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Box className="h-3 w-3" /> {nm?.pod_count ?? 0} pods
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-t pt-3">
-                  <span className="text-xs text-muted-foreground">Node Pool</span>
-                  <Select
-                    value={node.pool || "none"}
-                    onValueChange={(v) =>
-                      setNodePool.mutate({ nodeName: node.name, pool: v === "none" ? "" : v })
-                    }
-                  >
-                    <SelectTrigger className="h-7 w-40 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No pool</SelectItem>
-                      {[
-                        ...new Set([
-                          ...(pools ?? []),
-                          "default",
-                          "production",
-                          "development",
-                          "testing",
-                          "build",
-                        ]),
-                      ].map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })
+        <div className="space-y-4">
+          {gatewayNodes.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Gateway Nodes</h3>
+              {gatewayNodes.map((node) => renderNodeCard(node))}
+            </div>
+          )}
+          {workerNodes.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Workers / General Nodes</h3>
+              {workerNodes.map((node) => renderNodeCard(node))}
+            </div>
+          )}
+        </div>
       )}
 
       {offlineNodes.length > 0 && (
@@ -983,6 +1018,8 @@ function AddNodeSheet({
                   <SelectContent>
                     <SelectItem value="worker">Worker</SelectItem>
                     <SelectItem value="server">Server</SelectItem>
+                    <SelectItem value="gateway">Gateway</SelectItem>
+                    <SelectItem value="control-plane">Control Plane</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

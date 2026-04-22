@@ -1,0 +1,10 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: vipas-lb-pool
+  labels:
+    app.kubernetes.io/managed-by: vipas
+spec:
+  # Configure this CIDR from LB_IP_POOL in install.sh
+  blocks:
+    - cidr: "${LB_IP_POOL}"

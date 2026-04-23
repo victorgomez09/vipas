@@ -1,0 +1,16 @@
+# Envoy Gateway overrides for ARM64 / single-node deployments
+# Use with: helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm -n envoy-gateway-system -f deploy/values/envoy-arm64-overrides.yaml
+
+# Override controller image/repo if you have an ARM-compatible build
+controller:
+  image:
+    repository: envoyproxy/gateway
+    tag: v1.3.0
+    pullPolicy: IfNotPresent
+
+# You can also set controller.image.repository to a custom registry that hosts ARM64 images.
+# Example:
+# controller:
+#   image:
+#     repository: myregistry.local/envoyproxy/gateway
+#     tag: v1.3.0-arm64

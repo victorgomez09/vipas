@@ -1,0 +1,46 @@
+# Cilium Helm overrides optimized for single-node ARM64 / low-memory environments
+# Use with: helm upgrade --install cilium cilium/cilium -n kube-system -f deploy/values/cilium-arm64-overrides.yaml
+
+hubble:
+  enabled: false
+  relay:
+    enabled: false
+  ui:
+    enabled: false
+
+agent:
+  prometheus:
+    enabled: false
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+  image:
+    pullPolicy: IfNotPresent
+
+operator:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Keep kube-proxy replacement strict (chart default in installer)
+kubeProxyReplacement: strict
+
+# Reduce verbosity and optional components when on constrained devices
+prometheus:
+  enabled: false
+
+# IPAM and routing conservative defaults
+ipam:
+  mode: "cluster-pool"
+
+# If you need to override images for ARM, provide image repo/tag via --set or
+# by creating a small values file with `agent.image.repository`, `operator.image.repository`, etc.

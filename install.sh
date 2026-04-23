@@ -44,6 +44,20 @@ preflight() {
         warn "Low memory: ${MEM_MB}MB (recommended 2048MB+)"
     fi
 
+    # Low-memory hint mode
+    LOW_MEMORY_MODE="false"
+    if [ "$MEM_MB" -lt 2048 ]; then
+        warn "System has <2GB RAM — enabling low-memory defaults"
+        LOW_MEMORY_MODE="true"
+    fi
+
+    # Suggest Raspberry/low-memory mode when running on ARM with limited RAM
+    RPI_MODE="false"
+    if [ "$ARCH" = "arm64" ] && [ "$MEM_MB" -lt 4096 ]; then
+        warn "Detected ARM64 with <4GB RAM — enabling Raspberry/low-memory defaults"
+        RPI_MODE="true"
+    fi
+
     # Port check — skip if K3s already installed (re-run safe)
     if ! command -v k3s >/dev/null 2>&1; then
         for port in 80 443; do
@@ -223,24 +237,35 @@ install_cilium() {
     helm repo add cilium https://helm.cilium.io >/dev/null 2>&1 || true
     helm repo update >/dev/null 2>&1 || true
 
-    # Pin a tested Cilium version for production (update as needed)
-    CILIUM_HELM_VERSION="v1.14.0"
+        # Pin a tested Cilium version for production (update as needed)
+        CILIUM_HELM_VERSION="v1.14.0"
 
-    info "Installing Cilium (this may take a few minutes)..."
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+        info "Installing Cilium (this may take a few minutes)..."
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-    helm upgrade --install cilium cilium/cilium \
-      --namespace kube-system \
-      --create-namespace \
-      --version ${CILIUM_HELM_VERSION} \
-      --wait \
-      --timeout 10m \
-      --set kubeProxyReplacement=strict \
-      --set k8sServiceHost=${K8S_SERVICE_HOST} \
-      --set k8sServicePort=${K8S_SERVICE_PORT} \
-      --set hubble.relay.enabled=true \
-      --set hubble.ui.enabled=true \
-      --set encryption.enabled=${ENCRYPTION} >/dev/null 2>&1 || warn "Helm install/upgrade returned non-zero (check logs)"
+        # Allow optional extra Helm args via ENV_FILE (CILIUM_EXTRA_HELM_ARGS)
+        CILIUM_EXTRA_HELM_ARGS="${CILIUM_EXTRA_HELM_ARGS:-}"
+        if [ "${RPI_MODE}" = "true" ] || [ "${LOW_MEMORY_MODE:-false}" = "true" ]; then
+            warn "Applying low-memory Helm settings for Cilium (disabling Hubble UI/relay)"
+            CILIUM_EXTRA_HELM_ARGS="$CILIUM_EXTRA_HELM_ARGS --set hubble.relay.enabled=false --set hubble.ui.enabled=false"
+            if [ -f deploy/values/cilium-arm64-overrides.yaml ]; then
+                CILIUM_EXTRA_HELM_ARGS="$CILIUM_EXTRA_HELM_ARGS -f deploy/values/cilium-arm64-overrides.yaml"
+            fi
+        else
+            CILIUM_EXTRA_HELM_ARGS="$CILIUM_EXTRA_HELM_ARGS --set hubble.relay.enabled=true --set hubble.ui.enabled=true"
+        fi
+
+        helm upgrade --install cilium cilium/cilium \
+            --namespace kube-system \
+            --create-namespace \
+            --version ${CILIUM_HELM_VERSION} \
+            --wait \
+            --timeout 10m \
+            --set kubeProxyReplacement=strict \
+            --set k8sServiceHost=${K8S_SERVICE_HOST} \
+            --set k8sServicePort=${K8S_SERVICE_PORT} \
+            --set encryption.enabled=${ENCRYPTION} \
+            ${CILIUM_EXTRA_HELM_ARGS} >/dev/null 2>&1 || warn "Helm install/upgrade returned non-zero (check logs)"
 
     # Validation: prefer `cilium status --wait` if cilium CLI is present
     if command -v cilium >/dev/null 2>&1; then
@@ -369,10 +394,19 @@ install_envoy_gateway() {
     install_helm
     helm registry login docker.io >/dev/null 2>&1 || true
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-      --version ${ENVOY_GATEWAY_VERSION} \
-      -n envoy-gateway-system --create-namespace \
-      --wait --timeout 5m >/dev/null 2>&1 || warn "Envoy Gateway helm install returned non-zero"
+        # Allow extra helm args/overrides via ENV_FILE: ENVOY_EXTRA_HELM_ARGS
+        ENVOY_EXTRA_HELM_ARGS="${ENVOY_EXTRA_HELM_ARGS:-}"
+        if [ "${ARCH}" = "arm64" ] || [ "${RPI_MODE}" = "true" ]; then
+            warn "Running on ARM64/RPI mode. Ensure Envoy Gateway images are available for your architecture or set ENVOY_EXTRA_HELM_ARGS to override image repository/tag."
+            if [ -f deploy/values/envoy-arm64-overrides.yaml ]; then
+                ENVOY_EXTRA_HELM_ARGS="$ENVOY_EXTRA_HELM_ARGS -f deploy/values/envoy-arm64-overrides.yaml"
+            fi
+        fi
+        helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+          --version ${ENVOY_GATEWAY_VERSION} \
+          -n envoy-gateway-system --create-namespace \
+          --wait --timeout 5m \
+          ${ENVOY_EXTRA_HELM_ARGS} >/dev/null 2>&1 || warn "Envoy Gateway helm install returned non-zero"
     ok "Envoy Gateway install invoked"
 }
 
@@ -482,46 +516,46 @@ deploy() {
 
     . "$ENV_FILE"
 
-    cat > "$COMPOSE_FILE" <<COMPOSEFILE
+        cat > "$COMPOSE_FILE" <<COMPOSEFILE
 services:
-  vipas:
-    image: ghcr.io/victorgomez09/vipas:\${VIPAS_VERSION}
-    container_name: vipas
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      DATABASE_URL: postgres://vipas:\${DB_PASSWORD}@127.0.0.1:54321/vipas?sslmode=disable
-      JWT_SECRET: \${JWT_SECRET}
-      SETUP_SECRET: \${SETUP_SECRET}
-      K8S_IN_CLUSTER: "false"
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-      APP_URL: http://${SERVER_IP}:3000
-      SERVER_PORT: "8080"
-    volumes:
-      - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${INSTALL_DIR}:/opt/vipas
+    vipas:
+        image: \\${VIPAS_IMAGE:-ghcr.io/victorgomez09/vipas:\\${VIPAS_VERSION}}
+        container_name: vipas
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            DATABASE_URL: postgres://vipas:\\${DB_PASSWORD}@127.0.0.1:54321/vipas?sslmode=disable
+            JWT_SECRET: \\${JWT_SECRET}
+            SETUP_SECRET: \\${SETUP_SECRET}
+            K8S_IN_CLUSTER: "false"
+            KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+            APP_URL: http://${SERVER_IP}:3000
+            SERVER_PORT: "8080"
+        volumes:
+            - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
+            - /var/run/docker.sock:/var/run/docker.sock
+            - ${INSTALL_DIR}:/opt/vipas
 
-  postgres:
-    image: postgres:18-alpine
-    container_name: vipas-postgres
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:54321:5432"
-    environment:
-      POSTGRES_DB: vipas
-      POSTGRES_USER: vipas
-      POSTGRES_PASSWORD: \${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vipas"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+    postgres:
+        image: postgres:18-alpine
+        container_name: vipas-postgres
+        restart: unless-stopped
+        ports:
+            - "127.0.0.1:54321:5432"
+        environment:
+            POSTGRES_DB: vipas
+            POSTGRES_USER: vipas
+            POSTGRES_PASSWORD: \\${DB_PASSWORD}
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U vipas"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
 
 volumes:
-  pgdata:
+    pgdata:
 COMPOSEFILE
 
     # Download upgrade library for self-upgrade support
@@ -536,10 +570,11 @@ COMPOSEFILE
     info "Pulling images..."
     if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull 2>&1; then
         # If pull fails, check if image exists locally (pre-loaded)
-        if docker image inspect "ghcr.io/victorgomez09/vipas:${VIPAS_VERSION}" >/dev/null 2>&1; then
-            warn "Pull failed but local image found — using it"
+        IMAGE_TO_CHECK="${VIPAS_IMAGE:-ghcr.io/victorgomez09/vipas:${VIPAS_VERSION}}"
+        if docker image inspect "$IMAGE_TO_CHECK" >/dev/null 2>&1; then
+            warn "Pull failed but local image found — using it ($IMAGE_TO_CHECK)"
         else
-            fail "Failed to pull ghcr.io/victorgomez09/vipas:${VIPAS_VERSION}. Check your internet connection."
+            fail "Failed to pull $IMAGE_TO_CHECK. Check your internet connection."
         fi
     fi
 

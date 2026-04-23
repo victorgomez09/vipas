@@ -211,6 +211,11 @@ function DomainRow({
                   >
                     {domain.host}
                   </a>
+                  {domain.auto_dns && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Auto DNS
+                    </Badge>
+                  )}
                   {canRename && (
                     <Button
                       size="icon"

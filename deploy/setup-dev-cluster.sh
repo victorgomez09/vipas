@@ -390,78 +390,14 @@ EOF
   ${KUBECTL_CMD} delete ciliumbgppeeringpolicy vipas-bgp-peering --ignore-not-found >/dev/null 2>&1 || true
 }
 
-install_port_bridge() {
-  # Envoy Gateway maps Gateway listener port 80→10080 and 443→10443 internally.
-  # WSL2 auto-forwarding only detects processes that bind a socket on a port
-  # (it scans /proc/net/tcp). Nothing binds :80 directly, so Windows
-  # localhost:80 is never forwarded to WSL2.
-  #
-  # This function installs a lightweight socat systemd service that:
-  #   - binds 0.0.0.0:80  → proxies to 127.0.0.1:10080 (Envoy HTTP)
-  #   - binds 0.0.0.0:443 → proxies to 127.0.0.1:10443 (Envoy HTTPS)
-  # WSL2 sees port 80 in /proc/net/tcp and auto-creates the Windows portproxy
-  # so "astro.localhost" (or any *.localhost) in Chrome on Windows routes through
-  # exactly like Traefik does with "docker run -p 80:80".
-  #
-  # This also works on multi-node clusters: run this function on each node.
-
-  echo "[info] installing socat port bridge (80→10080, 443→10443)"
-
-  # Install socat
-  if ! command -v socat >/dev/null 2>&1; then
-    if command -v apt-get >/dev/null 2>&1; then
-      apt-get install -y socat >/dev/null 2>&1 || { echo "[error] failed to install socat"; return 1; }
-    elif command -v yum >/dev/null 2>&1; then
-      yum install -y socat >/dev/null 2>&1 || { echo "[error] failed to install socat"; return 1; }
-    else
-      echo "[error] cannot install socat: no apt-get or yum found" >&2
-      return 1
-    fi
-  fi
-
-  # Write systemd unit file
-  cat > /etc/systemd/system/vipas-port-bridge.service << 'UNIT'
-[Unit]
-Description=Vipas port bridge: forwards :80->:10080 and :443->:10443 (Envoy Gateway)
-Documentation=https://github.com/your-org/vipas
-After=network.target k3s.service
-Wants=k3s.service
-
-[Service]
-Type=forking
-# Wait a few seconds for Envoy to start before binding
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do ss -tlnp | grep -q :10080 && exit 0; sleep 2; done; exit 1'
-# Fork two socat listeners in background
-ExecStart=/bin/sh -c '\
-  socat TCP-LISTEN:80,fork,reuseaddr,su=nobody TCP:127.0.0.1:10080 &  \
-  echo $! > /run/vipas-bridge-http.pid; \
-  socat TCP-LISTEN:443,fork,reuseaddr,su=nobody TCP:127.0.0.1:10443 & \
-  echo $! > /run/vipas-bridge-https.pid'
-ExecStop=/bin/sh -c '\
-  [ -f /run/vipas-bridge-http.pid ]  && kill $(cat /run/vipas-bridge-http.pid)  || true; \
-  [ -f /run/vipas-bridge-https.pid ] && kill $(cat /run/vipas-bridge-https.pid) || true'
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-  systemctl daemon-reload
-  systemctl enable vipas-port-bridge.service
-  systemctl restart vipas-port-bridge.service || true
-
-  # Give it a moment to start
-  sleep 3
-
-  # Verify
-  if ss -tlnp | grep -q ':80 '; then
-    echo "[ok] port bridge active: :80 and :443 are now listening on the host"
-    echo "[ok] WSL2 will auto-forward Windows localhost:80 → Envoy Gateway"
-  else
-    echo "[warn] socat bridge may not have started yet, check: systemctl status vipas-port-bridge"
-    echo "       Manually: socat TCP-LISTEN:80,fork,reuseaddr TCP:127.0.0.1:10080 &"
-  fi
+install_external_dns() {
+  echo "[info] installing external-dns (provider=coredns)"
+  install_helm
+  helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/ >/dev/null 2>&1 || true
+  helm repo update >/dev/null 2>&1 || true
+  EXTERNAL_DNS_VERSION=${EXTERNAL_DNS_VERSION:-1.11.0}
+  # Install external-dns configured to use CoreDNS for development and watch HTTPRoute
+  sh -c "helm upgrade --install external-dns external-dns/external-dns -n external-dns --create-namespace --version \"${EXTERNAL_DNS_VERSION}\" --set provider=coredns --set sources={gateway-httproute} --wait --timeout 180s" || echo "[warn] external-dns helm install returned non-zero"
 }
 
 configure_local_dns() {
@@ -600,7 +536,7 @@ main() {
   install_envoy_gateway
   apply_gateway_manifests
   install_cert_manager
-  install_port_bridge
+  install_external_dns
   configure_local_dns
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

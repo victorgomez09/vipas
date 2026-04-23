@@ -187,6 +187,43 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 		}
 	}
 
+	// DNS settings: validate and persist; installer handles deployment during install.
+	switch key {
+	case model.SettingDNSProvider:
+		if value != "" {
+			if !isValidDNSProvider(value) {
+				return fmt.Errorf("invalid dns_provider: %q (allowed: cloudflare, route53, digitalocean, coredns, pihole, manual)", value)
+			}
+		}
+		// Orchestrate external-dns at runtime when provider changes.
+		// Retrieve current zone and api_key_ref and apply.
+		zone, _ := s.store.Settings().Get(ctx, model.SettingDNSZone)
+		apiRef, _ := s.store.Settings().Get(ctx, model.SettingDNSAPIKeyRef)
+		if err := s.orch.EnsureExternalDNS(ctx, value, zone, apiRef); err != nil {
+			s.logger.Warn("dns provider saved but external-dns orchestration failed", slog.Any("error", err))
+			return fmt.Errorf("setting saved, but external-dns not applied: %w", err)
+		}
+	case model.SettingDNSZone:
+		prov, _ := s.store.Settings().Get(ctx, model.SettingDNSProvider)
+		apiRef, _ := s.store.Settings().Get(ctx, model.SettingDNSAPIKeyRef)
+		if prov != "" {
+			if err := s.orch.EnsureExternalDNS(ctx, prov, value, apiRef); err != nil {
+				s.logger.Warn("dns zone saved but external-dns orchestration failed", slog.Any("error", err))
+				return fmt.Errorf("setting saved, but external-dns not applied: %w", err)
+			}
+		}
+	case model.SettingDNSAPIKeyRef:
+		// When API key ref is updated, re-apply external-dns so the chart picks up credentials.
+		prov, _ := s.store.Settings().Get(ctx, model.SettingDNSProvider)
+		zone, _ := s.store.Settings().Get(ctx, model.SettingDNSZone)
+		if prov != "" {
+			if err := s.orch.EnsureExternalDNS(ctx, prov, zone, value); err != nil {
+				s.logger.Warn("dns api key ref saved but external-dns orchestration failed", slog.Any("error", err))
+				return fmt.Errorf("setting saved, but external-dns not applied: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -300,6 +337,21 @@ func (s *SettingService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error)
 	}, nil
 }
 
+// CreateDNSSecret creates/updates a secret in the cluster under the external-dns
+// namespace and returns a reference string that can be stored as dns_api_key_ref.
+func (s *SettingService) CreateDNSSecret(ctx context.Context, name string, data map[string]string) (string, error) {
+	// Convert to bytes
+	d := make(map[string][]byte)
+	for k, v := range data {
+		d[k] = []byte(v)
+	}
+	if err := s.orch.CreateOrUpdateSecret(ctx, "external-dns", name, d); err != nil {
+		return "", err
+	}
+	// Return a simple ref (namespace/name)
+	return "external-dns/" + name, nil
+}
+
 // SaveSMTPConfig writes SMTP settings to the settings table.
 func (s *SettingService) SaveSMTPConfig(ctx context.Context, cfg *SMTPConfig) error {
 	// Validate required fields when enabling
@@ -363,4 +415,18 @@ func detectLocalIP() string {
 		}
 	}
 	return "127.0.0.1"
+}
+
+func isValidDNSProvider(v string) bool {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if v == "" {
+		return false
+	}
+	allowed := []string{"cloudflare", "route53", "digitalocean", "coredns", "pihole", "manual"}
+	for _, a := range allowed {
+		if v == a {
+			return true
+		}
+	}
+	return false
 }

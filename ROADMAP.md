@@ -347,19 +347,19 @@
 
 > Crear registros DNS automáticamente al añadir un dominio. Aplica a prod con dominio real.
 
-- [ ] **7.1** Instalar **external-dns** configurado para observar `HTTPRoute`:
+- [x] **7.1** Instalar **external-dns** configurado para observar `HTTPRoute` — instalado por el instalador (`install.sh`) y soportado por el orquestador:
   ```bash
   helm install external-dns external-dns/external-dns \
     -n external-dns --create-namespace \
     --set provider=cloudflare \
     --set source=gateway-httproute
   ```
-- [ ] **7.2** Añadir al modelo `Setting`:
+- [x] **7.2** Añadir al modelo `Setting` — claves añadidas: `dns_provider`, `dns_api_key_ref`, `dns_zone` (API key guardada como referencia a Secret)
   - `dns_provider` → `cloudflare | route53 | digitalocean | coredns | pihole | manual`
   - `dns_api_key` → secret cifrado (no en BD en texto plano)
   - `dns_zone` → zona DNS donde crear registros
-- [ ] **7.3** Actualizar `setting_service.go` para gestionar la config de external-dns
-- [ ] **7.4** En `domain_service.go`: si `dns_provider != manual`, informar al usuario que el registro A se crea automáticamente
+- [x] **7.3** Actualizar `setting_service.go` para gestionar la config de external-dns — al cambiar settings se re-aplica `external-dns` via orquestador
+- [x] **7.4** En `domain_service.go`: si `dns_provider != manual`, informar al usuario que el registro A se crea automáticamente — `Domain.AutoDNS` marcado y UI muestra badge
 
 ---
 

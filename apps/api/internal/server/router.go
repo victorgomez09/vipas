@@ -258,6 +258,9 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.GET("/settings", settings.GetAll)
 			protected.PUT("/settings", settings.Update)
 			protected.GET("/settings/verify-domain", settings.VerifyDomain)
+			// DNS secret creation (create provider credentials securely)
+			dnsSecretHandler := v1.NewDNSSecretHandler(deps.Services.Setting)
+			protected.POST("/settings/dns-secret", dnsSecretHandler.Create)
 
 			// Notifications
 			notif := v1.NewNotificationHandler(deps.Services.Notification)

@@ -82,6 +82,33 @@ curl -sSL https://get.vipas.dev/upgrade | sudo sh
 > Vipas doesn't wrap Kubernetes — it **is** Kubernetes.<br/>
 > Your workloads run the same way they would on any K8s cluster, and everything you learn here applies everywhere else.
 
+## DNS / external-dns
+
+Vipas can automatically create DNS records for application domains using the Kubernetes project `external-dns`.
+
+- Development: by default the installer uses `coredns` mode (no external provider) and the UI will show generated domains like `<IP>.sslip.io` which don't require external DNS records.
+- Production: install `external-dns` with a supported provider (Cloudflare, Route53, DigitalOcean, etc.) and configure the provider and zone in the Panel Settings → DNS.
+
+Installer notes:
+
+1. During `install.sh` the installer will deploy `external-dns` when `DNS_PROVIDER` in the `.env` is set (default: `coredns`).
+2. Pin the provider and chart version via `deploy/versions.env` (`EXTERNAL_DNS_VERSION`).
+3. For providers that require credentials, store the API key securely (External Secrets / Vault) and set the secret reference in Settings as `dns_api_key_ref` — the installer and platform will use that reference when provisioning external-dns.
+
+You can also manually install external-dns on the cluster:
+
+```bash
+helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
+helm repo update
+helm upgrade --install external-dns external-dns/external-dns \
+  -n external-dns --create-namespace \
+  --set provider=cloudflare \
+  --set source=gateway-httproute \
+  --set txtOwnerId=vipas
+```
+
+After configuring a provider and zone in Settings, newly created domains will show `Auto DNS` in the panel and `external-dns` will create the required A records automatically.
+
 ## Contributing
 
 Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

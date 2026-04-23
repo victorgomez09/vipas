@@ -345,6 +345,18 @@ func (n *NoopOrchestrator) GetNodeMetrics(ctx context.Context) ([]NodeMetrics, e
 	}, nil
 }
 
+// EnsureExternalDNS is a noop implementation for development.
+func (n *NoopOrchestrator) EnsureExternalDNS(ctx context.Context, provider, zone, apiKeyRef string) error {
+	n.logger.Info("[noop] ensure external-dns", slog.String("provider", provider), slog.String("zone", zone), slog.String("api_key_ref", apiKeyRef))
+	return nil
+}
+
+// CreateOrUpdateSecret is a noop stub that logs secret creation.
+func (n *NoopOrchestrator) CreateOrUpdateSecret(ctx context.Context, namespace, name string, data map[string][]byte) error {
+	n.logger.Info("[noop] create/update secret", slog.String("namespace", namespace), slog.String("name", name))
+	return nil
+}
+
 func (n *NoopOrchestrator) StreamLogs(ctx context.Context, app *model.Application, opts LogOpts) (io.ReadCloser, error) {
 	r, w := io.Pipe()
 	go func() {

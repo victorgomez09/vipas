@@ -216,6 +216,9 @@ install_cilium() {
     fi
 
     install_helm
+    if [ -f "./deploy/versions.env" ]; then
+        . ./deploy/versions.env
+    fi
 
     . "$ENV_FILE" 2>/dev/null || true
 
@@ -504,10 +507,44 @@ JWT_SECRET=$JWT_SECRET
 SETUP_SECRET=$SETUP_SECRET
 SERVER_IP=$SERVER_IP
 VIPAS_VERSION=latest
+DNS_PROVIDER=coredns
+DNS_ZONE=
 EOF
     chmod 600 "$ENV_FILE"
     ok "Secrets generated"
     warn "APP_URL set to http://$SERVER_IP:3000 — change in Settings if behind NAT/proxy"
+}
+
+
+# ── Install external-dns (optional) ─────────────────────────────
+install_external_dns() {
+    . "$ENV_FILE" 2>/dev/null || true
+    DNS_PROVIDER="${DNS_PROVIDER:-coredns}"
+    DNS_ZONE="${DNS_ZONE:-}"
+
+    if [ "$DNS_PROVIDER" = "manual" ] || [ -z "$DNS_PROVIDER" ]; then
+        info "DNS_PROVIDER is set to manual or empty — skipping external-dns install"
+        return
+    fi
+
+    install_helm
+    info "Installing external-dns (provider=${DNS_PROVIDER})"
+    helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/ >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1 || true
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+    EXTRA_ARGS="--set provider=${DNS_PROVIDER} --set source=gateway-httproute --set txtOwnerId=vipas"
+    if [ -n "$DNS_ZONE" ]; then
+        EXTRA_ARGS="$EXTRA_ARGS --set domainFilters[0]=${DNS_ZONE}"
+    fi
+
+    if ! helm upgrade --install external-dns external-dns/external-dns \
+        --version ${EXTERNAL_DNS_VERSION:-} \
+        -n external-dns --create-namespace --wait --timeout 3m $EXTRA_ARGS >/dev/null 2>&1; then
+        warn "external-dns helm install returned non-zero — check logs"
+    else
+        ok "external-dns install invoked"
+    fi
 }
 
 # ── Deploy via Docker Compose ───────────────────────────────────
@@ -645,6 +682,7 @@ main() {
     install_envoy_gateway
     apply_gateway_manifests
     install_cert_manager
+    install_external_dns
     generate_secrets
     deploy
     summary

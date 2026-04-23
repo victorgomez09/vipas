@@ -412,13 +412,24 @@ function GeneralTab() {
   const saveDomain = useUpdateSetting();
   const savePanel = useUpdateSetting();
   const saveEmail = useUpdateSetting();
+  const saveDNS = useUpdateSetting();
   const [baseDomain, setBaseDomain] = useState("");
   const [httpsEmail, setHttpsEmail] = useState("");
+  const [dnsProvider, setDnsProvider] = useState("");
+  const [dnsZone, setDnsZone] = useState("");
+  const [dnsApiKeyRef, setDnsApiKeyRef] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createKey, setCreateKey] = useState("");
+  const [createPending, setCreatePending] = useState(false);
 
   useEffect(() => {
     if (settings) {
       setBaseDomain(settings.base_domain ?? "");
       setHttpsEmail(settings.https_email ?? "");
+      setDnsProvider(settings.dns_provider ?? "");
+      setDnsZone(settings.dns_zone ?? "");
+      setDnsApiKeyRef(settings.dns_api_key_ref ?? "");
     }
   }, [settings]);
 
@@ -426,6 +437,32 @@ function GeneralTab() {
   if (!settings) return null;
 
   const defaultDomain = settings.server_ip ? `${settings.server_ip}.sslip.io` : "";
+
+  async function handleCreateSecret() {
+    if (!createName || !createKey) return;
+    setCreatePending(true);
+    try {
+      const res = await fetch('/api/v1/settings/dns-secret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: createName, data: { api_key: createKey } }),
+      });
+      if (!res.ok) throw new Error('failed to create secret');
+      const body = await res.json();
+      const ref = body.ref;
+      setDnsApiKeyRef(ref);
+      // Persist the ref to settings
+      saveDNS.mutate({ key: 'dns_api_key_ref', value: ref });
+      setCreateDialogOpen(false);
+      setCreateName('');
+      setCreateKey('');
+      toast.success('Secret created and reference saved');
+    } catch (err) {
+      toast.error('Failed to create secret');
+    } finally {
+      setCreatePending(false);
+    }
+  }
 
   return (
     <div className="mt-4 space-y-6">
@@ -568,6 +605,76 @@ function GeneralTab() {
           </p>
         </CardContent>
       </Card>
+
+      {/* DNS / external-dns */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Hash className="h-4 w-4" /> DNS / external-dns
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-3 gap-4 items-center">
+              <div className="col-span-1 text-muted-foreground">Provider</div>
+              <div className="col-span-2">
+                <Select value={dnsProvider} onValueChange={setDnsProvider}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">(none)</SelectItem>
+                    <SelectItem value="coredns">coredns</SelectItem>
+                    <SelectItem value="cloudflare">cloudflare</SelectItem>
+                    <SelectItem value="route53">route53</SelectItem>
+                    <SelectItem value="digitalocean">digitalocean</SelectItem>
+                    <SelectItem value="pihole">pihole</SelectItem>
+                    <SelectItem value="manual">manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="col-span-1 text-muted-foreground">Zone</div>
+              <div className="col-span-2">
+                <Input value={dnsZone} onChange={(e) => setDnsZone(e.target.value)} className="w-64 font-mono" />
+              </div>
+
+              <div className="col-span-1 text-muted-foreground">API Key Ref</div>
+              <div className="col-span-2 flex items-center gap-2">
+                <Input value={dnsApiKeyRef} onChange={(e) => setDnsApiKeyRef(e.target.value)} className="w-64 font-mono" />
+                <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+                  Create
+                </Button>
+                <Button size="sm" onClick={() => saveDNS.mutate({ key: "dns_provider", value: dnsProvider }) || saveDNS.mutate({ key: "dns_zone", value: dnsZone }) || saveDNS.mutate({ key: "dns_api_key_ref", value: dnsApiKeyRef })}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create DNS Credentials</DialogTitle>
+            <DialogDescription>Store provider API key securely in the cluster.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Secret Name</Label>
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="cloudflare-api" />
+            </div>
+            <div>
+              <Label className="text-xs">API Key</Label>
+              <Input value={createKey} onChange={(e) => setCreateKey(e.target.value)} placeholder="sk_xxx" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleCreateSecret} disabled={!createName || !createKey}>{createPending ? '...' : 'Create'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -887,6 +994,66 @@ function BackupTab() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* DNS / external-dns */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Globe className="h-4 w-4" /> DNS / external-dns
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Configure automatic DNS provisioning via external-dns. In development the default
+            provider is <strong>coredns</strong> (no external API). In production choose a
+            supported provider and supply a secure API key reference.
+          </p>
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Provider</span>
+              <Select value={dnsProvider} onValueChange={(v) => setDnsProvider(v)}>
+                <SelectTrigger className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">manual (no automatic DNS)</SelectItem>
+                  <SelectItem value="coredns">coredns (local)</SelectItem>
+                  <SelectItem value="cloudflare">cloudflare</SelectItem>
+                  <SelectItem value="route53">route53</SelectItem>
+                  <SelectItem value="digitalocean">digitalocean</SelectItem>
+                  <SelectItem value="pihole">pihole</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">DNS Zone</span>
+              <Input value={dnsZone} onChange={(e) => setDnsZone(e.target.value)} className="w-64 font-mono" placeholder="example.com" />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">API Key Reference</Label>
+              <Input value={dnsApiKeyRef} onChange={(e) => setDnsApiKeyRef(e.target.value)} placeholder="secret-name:key (recommended)" className="max-w-md" />
+              <p className="text-xs text-muted-foreground">Store the real API key in External Secrets / Vault and set a reference here (not plain text).</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  saveDNS.mutate({ key: "dns_provider", value: dnsProvider });
+                  saveDNS.mutate({ key: "dns_zone", value: dnsZone });
+                  saveDNS.mutate({ key: "dns_api_key_ref", value: dnsApiKeyRef });
+                  toast.success("DNS settings saved");
+                }}
+                size="sm"
+                disabled={saveDNS.isPending}
+              >
+                <Save className="h-3.5 w-3.5" /> {saveDNS.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

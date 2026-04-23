@@ -106,6 +106,11 @@ func (s *DomainService) Create(ctx context.Context, appID uuid.UUID, input Creat
 		_ = s.store.Domains().Update(ctx, domain)
 	}
 
+	// If a DNS provider is configured (not manual), annotate response so UI can inform the user
+	if dnsProvider, _ := s.settingSvc.Get(ctx, model.SettingDNSProvider); dnsProvider != "" && dnsProvider != "manual" {
+		domain.AutoDNS = true
+	}
+
 	s.logger.Info("domain created", slog.String("host", domain.Host), slog.String("app", app.Name))
 	return domain, nil
 }
@@ -184,6 +189,10 @@ func (s *DomainService) GenerateTraefikDomain(ctx context.Context, appID uuid.UU
 	// Sync route status and cert secret
 	if status, sErr := s.orch.GetHTTPRouteStatus(ctx, domain, app); sErr == nil {
 		domain.RouteReady = status.Ready
+	}
+	// Mark AutoDNS for UI if provider present
+	if dnsProvider, _ := s.settingSvc.Get(ctx, model.SettingDNSProvider); dnsProvider != "" && dnsProvider != "manual" {
+		domain.AutoDNS = true
 	}
 	_ = s.store.Domains().Update(ctx, domain)
 

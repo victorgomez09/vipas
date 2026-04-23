@@ -31,6 +31,10 @@ type Orchestrator interface {
 	DaemonSetInspector
 	ServiceAccountManager
 	CleanupInspector
+	// External DNS management
+	EnsureExternalDNS(ctx context.Context, provider, zone, apiKeyRef string) error
+	// Create or update an arbitrary secret in a namespace (used for provider credentials)
+	CreateOrUpdateSecret(ctx context.Context, namespace, name string, data map[string][]byte) error
 }
 
 // HelmInspector provides information about Helm releases.

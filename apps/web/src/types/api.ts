@@ -232,6 +232,7 @@ export interface Domain {
   force_https: boolean;
   cert_expiry?: string;
   route_ready: boolean;
+  auto_dns?: boolean;
 }
 
 // ── Databases ──────────────────────────────────────────────────────

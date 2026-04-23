@@ -21,4 +21,10 @@ const (
 	SettingLBIPPool    = "lb_ip_pool"   // CIDR for CiliumLoadBalancerIPPool
 	SettingGatewayIP   = "gateway_ip"   // external IP assigned to the Envoy Gateway Service
 	SettingK3sAPIVIP   = "k3s_api_vip"  // VIP for K3s API server in HA mode (e.g. 10.0.0.10)
+
+	// DNS / external-dns settings
+	SettingDNSProvider = "dns_provider" // cloudflare | route53 | digitalocean | coredns | pihole | manual
+	// Note: API keys should be stored securely (External Secrets / Vault). This key is a reference name.
+	SettingDNSAPIKeyRef = "dns_api_key_ref" // reference to encrypted secret holding DNS API key
+	SettingDNSZone      = "dns_zone"        // DNS zone where records will be created (e.g. example.com)
 )

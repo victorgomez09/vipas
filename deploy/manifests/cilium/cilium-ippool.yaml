@@ -1,0 +1,14 @@
+# Cilium LoadBalancer IP pool example
+# Replace cidr with your public IP pool available for the LB
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: vipas-ippool
+  namespace: kube-system
+spec:
+  ipPools:
+    - cidr: 198.51.100.0/29
+      name: public-pool
+      gateway: 198.51.100.1
+      nodeSelector: {}
+      bgpAdvertise: true

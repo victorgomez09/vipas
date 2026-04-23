@@ -14,6 +14,15 @@ const vipasNetPolName = "vipas-isolation"
 
 // EnsureNetworkPolicy creates or removes a default-deny NetworkPolicy for namespace isolation.
 func (o *Orchestrator) EnsureNetworkPolicy(ctx context.Context, namespace string, enabled bool) error {
+	// Prefer CiliumNetworkPolicy when the Cilium CRD is installed.
+	if _, err := o.client.Discovery().ServerResourcesForGroupVersion("cilium.io/v2"); err == nil {
+		// Use the dynamic client implementation which creates a CiliumNetworkPolicy CRD
+		if err := o.EnsureCiliumNetworkPolicy(ctx, namespace, enabled); err == nil {
+			return nil
+		}
+		// If Cilium path fails, fall through to default NetworkPolicy implementation
+		o.logger.Info("fallback to k8s NetworkPolicy after cilium attempt", slog.String("ns", namespace), slog.Any("err", err))
+	}
 	if !enabled {
 		// Remove network policy if it exists
 		err := o.client.NetworkingV1().NetworkPolicies(namespace).Delete(ctx, vipasNetPolName, metav1.DeleteOptions{})

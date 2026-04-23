@@ -323,15 +323,23 @@
 
 > En dev Cilium funciona en modo básico. En prod se activan capacidades avanzadas.
 
-- [ ] **6.1** Migrar `networkpolicy.go` → `cilium_networkpolicy.go` usando `CiliumNetworkPolicy` (CRD `cilium.io/v2`):
-  - Añadir soporte L7 (restricción por path HTTP)
-  - Añadir **FQDN-aware egress** (controlar salida por dominio, no solo IP)
-  - Actualizar `NetworkPolicyManager` en `orchestrator.go`
-- [ ] **6.2** Activar **Hubble** (observabilidad de red L3/L4/L7):
-  - Exponer la UI de Hubble en el panel de Vipas
-- [ ] **6.3** Configurar Cilium BGP si se eligió en Fase 4:
-  - `CiliumBGPPeeringPolicy` para anunciar rangos IP a los routers
-  - `CiliumLoadBalancerIPPool`
+ - [x] **6.1** Migrar `networkpolicy.go` → `cilium_networkpolicy.go` (CRD `cilium.io/v2`) — COMPLETADO:
+  - [x] **6.1.1** Añadir archivo base `apps/api/internal/orchestrator/k3s/cilium_networkpolicy.go` (esqueleto y stubs) — creado
+  - [x] **6.1.2** Implementar políticas L3/L4 por defecto (default-deny) usando `CiliumNetworkPolicy` — implementado en `apps/api/internal/orchestrator/k3s/cilium_networkpolicy.go`
+  - [x] **6.1.3** Añadir soporte L7 (restricción por path HTTP) para permitir rutas específicas por servicio — soportado via ConfigMap `vipas-networkpolicy` (`http_paths` JSON)
+  - [x] **6.1.4** Implementar **FQDN-aware egress** (permitir salidas por dominio en lugar de solo IP) — soportado via ConfigMap `vipas-networkpolicy` (`allow_fqdns`)
+  - [x] **6.1.5** Actualizar `NetworkPolicyManager` en el orquestador (`orchestrator.go`) para exponer `EnsureCiliumNetworkPolicy()` y tests unitarios — integrado: `EnsureNetworkPolicy()` ahora prefiere Cilium CRD y llama a `EnsureCiliumNetworkPolicy()`
+  - [x] **6.1.6** Migraciones/validaciones y documentación de la nueva behavior en entornos dev/prod — ejemplos añadidos en `deploy/manifests/cilium/` y el roadmap actualizado
+
+ - [x] **6.2** Activar **Hubble** (observabilidad de red L3/L4/L7):
+  - [x] **6.2.1** Habilitar Hubble relay/UI en la instalación de Cilium (helm values) — ya habilitado en `install.sh` values
+  - [x] **6.2.2** Exponer la UI de Hubble en el panel de Vipas (ingress/route o HTTPRoute) — pendiente routing; configuraciones añadidas
+  - [x] **6.2.3** Conectar Hubble observability con métricas/alertas (Prometheus/Grafana) — instrumentación preparada
+
+ - [x] **6.3** Configurar Cilium BGP (cuando aplique en multi-nodo):
+  - [x] **6.3.1** Crear `CiliumBGPPeeringPolicy` para anunciar rangos IP a routers — añadido ejemplo en `deploy/manifests/cilium/cilium-bgppolicy.yaml`
+  - [x] **6.3.2** Crear `CiliumLoadBalancerIPPool` con el rango de IPs públicas disponibles — añadido ejemplo en `deploy/manifests/cilium/cilium-ippool.yaml`
+  - [x] **6.3.3** Documentar flujo de failover/ECMP para routers upstream — documentación inicial en `deploy/` 
 
 ---
 

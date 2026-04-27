@@ -133,6 +133,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 				Namespace: svcNS,
 				Labels: map[string]string{
 					"app.kubernetes.io/managed-by": "vipas",
+					"vipas/lb-type":                "bgp",
 				},
 			},
 			Spec: corev1.ServiceSpec{

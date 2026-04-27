@@ -265,6 +265,7 @@ install_cilium() {
             --wait \
             --timeout 10m \
             --set kubeProxyReplacement=strict \
+            --set bgpControlPlane.enabled=true \
             --set k8sServiceHost=${K8S_SERVICE_HOST} \
             --set k8sServicePort=${K8S_SERVICE_PORT} \
             --set encryption.enabled=${ENCRYPTION} \
@@ -533,7 +534,7 @@ install_external_dns() {
     helm repo update >/dev/null 2>&1 || true
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-    EXTRA_ARGS="--set provider=${DNS_PROVIDER} --set source=gateway-httproute --set txtOwnerId=vipas"
+    EXTRA_ARGS="--set provider=${DNS_PROVIDER} --set sources={gateway-httproute} --set txtOwnerId=vipas"
     if [ -n "$DNS_ZONE" ]; then
         EXTRA_ARGS="$EXTRA_ARGS --set domainFilters[0]=${DNS_ZONE}"
     fi

@@ -117,7 +117,8 @@ install_cilium() {
     if ! helm upgrade --install cilium cilium/cilium \
       --namespace kube-system --create-namespace \
       --version "${CILIUM_VERSION}" \
-      --set kubeProxyReplacement=strict \
+      --set kubeProxyReplacement=true \
+      --set bgpControlPlane.enabled=true \
       --set k8sServiceHost="${K8S_SERVICE_HOST}" \
       --set k8sServicePort="${K8S_SERVICE_PORT}" \
       --set hubble.relay.enabled=true \
@@ -354,50 +355,67 @@ install_cert_manager() {
   fi
 }
 
-configure_cilium_l2_lb() {
-  echo "[info] configuring Cilium LB (L2 announcement)"
+configure_cilium_bgp_lb() {
+  echo "[info] configuring Cilium LB (BGP mode)"
 
-  # Default dev pool can be overridden with LB_IP_POOL env var.
   LB_IP_POOL=${LB_IP_POOL:-172.26.31.240/28}
-  NODE_IP=$(sh -c "${KUBECTL_CMD} get nodes -o jsonpath='{.items[0].status.addresses[?(@.type==\"InternalIP\")].address}'" 2>/dev/null || echo "")
-  echo "[info] Cilium LB pool: ${LB_IP_POOL} (node IP: ${NODE_IP})"
+  BGP_LOCAL_ASN=${BGP_LOCAL_ASN:-64512}
+  BGP_PEER_ASN=${BGP_PEER_ASN:-64512}
+  BGP_PEER_ADDRESS=${BGP_PEER_ADDRESS:-10.0.0.1}
+
+  echo "[info] Applying Cilium BGP resources (Pool: ${LB_IP_POOL}, Peer: ${BGP_PEER_ADDRESS})"
 
   cat <<EOF | ${KUBECTL_CMD} apply -f -
 apiVersion: cilium.io/v2alpha1
 kind: CiliumLoadBalancerIPPool
 metadata:
   name: vipas-lb-pool
-  labels:
-    app.kubernetes.io/managed-by: vipas
 spec:
   blocks:
   - cidr: ${LB_IP_POOL}
 ---
-apiVersion: cilium.io/v2alpha1
-kind: CiliumL2AnnouncementPolicy
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeeringPolicy
 metadata:
-  name: vipas-l2-announcement
-  labels:
-    app.kubernetes.io/managed-by: vipas
+  name: vipas-bgp-peering
 spec:
-  serviceSelector:
+  nodeSelector:
     matchLabels:
-      app.kubernetes.io/managed-by: vipas
-  loadBalancerIPs: true
+      kubernetes.io/os: linux
+  virtualRouters:
+  - localASN: ${BGP_LOCAL_ASN}
+    exportPodCIDR: true
+    neighbors:
+    - peerAddress: "${BGP_PEER_ADDRESS}/32"
+      peerASN: ${BGP_PEER_ASN}
+    serviceSelector:
+      matchExpressions:
+        - {key: app.kubernetes.io/managed-by, operator: In, values: [vipas]}
 EOF
 
-  # Ensure no stale BGP policy remains in dev setup.
-  ${KUBECTL_CMD} delete ciliumbgppeeringpolicy vipas-bgp-peering --ignore-not-found >/dev/null 2>&1 || true
+  # Ensure any existing L2 policy is removed to avoid conflicts when using BGP mode
+  ${KUBECTL_CMD} delete ciliuml2announcementpolicy vipas-l2-announcement --ignore-not-found >/dev/null 2>&1 || true
 }
 
 install_external_dns() {
-  echo "[info] installing external-dns (provider=coredns)"
+  DNS_PROVIDER=${DNS_PROVIDER:-coredns}
+  if [ "$DNS_PROVIDER" = "manual" ]; then
+      return
+  fi
+
+  echo "[info] installing external-dns (provider=${DNS_PROVIDER})"
   install_helm
   helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/ >/dev/null 2>&1 || true
   helm repo update >/dev/null 2>&1 || true
   EXTERNAL_DNS_VERSION=${EXTERNAL_DNS_VERSION:-1.11.0}
   # Install external-dns configured to use CoreDNS for development and watch HTTPRoute
-  sh -c "helm upgrade --install external-dns external-dns/external-dns -n external-dns --create-namespace --version \"${EXTERNAL_DNS_VERSION}\" --set provider=coredns --set sources={gateway-httproute} --wait --timeout 180s" || echo "[warn] external-dns helm install returned non-zero"
+  helm upgrade --install external-dns external-dns/external-dns \
+    -n external-dns --create-namespace \
+    --version "${EXTERNAL_DNS_VERSION}" \
+    --set provider=${DNS_PROVIDER} \
+    --set sources={gateway-httproute} \
+    --set txtOwnerId=vipas \
+    --wait --timeout 180s || echo "[warn] external-dns helm install returned non-zero"
 }
 
 configure_local_dns() {
@@ -531,7 +549,7 @@ main() {
     fi
     check_kubectl
   install_cilium
-  configure_cilium_l2_lb
+  configure_cilium_bgp_lb
   install_gateway_api_crds
   install_envoy_gateway
   apply_gateway_manifests

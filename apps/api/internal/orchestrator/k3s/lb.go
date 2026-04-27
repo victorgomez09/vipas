@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,7 +20,7 @@ import (
 var (
 	ciliumLBPoolGVR       = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliumloadbalancerippools"}
 	ciliumL2PolicyGVR     = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliuml2announcementpolicies"}
-	ciliumBGPPeeringGVR   = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliumbgppeeringpolicies"}
+	ciliumBGPPeeringGVR   = schema.GroupVersionResource{Group: "cilium.io", Version: "v2", Resource: "ciliumbgppeeringpolicies"}
 	vipasLBPoolName       = "vipas-lb-pool"
 	vipasL2PolicyName     = "vipas-l2-announcement"
 	vipasBGPPolicyName    = "vipas-bgp-peering"
@@ -98,10 +100,24 @@ func (o *Orchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool st
 		return nil
 	}
 
-	// cilium-bgp mode: create a managed peering policy shell and expect operators
-	// to update neighbors/local ASN if their topology differs.
+	bgpPeerAddr := os.Getenv("BGP_PEER_ADDRESS")
+	bgpPeerAsn, _ := strconv.ParseInt(os.Getenv("BGP_PEER_ASN"), 10, 64)
+	bgpLocalAsn, _ := strconv.ParseInt(os.Getenv("BGP_LOCAL_ASN"), 10, 64)
+
+	if bgpLocalAsn == 0 {
+		bgpLocalAsn = defaultCiliumLocalASN
+	}
+
+	neighbors := []interface{}{}
+	if bgpPeerAddr != "" && bgpPeerAsn != 0 {
+		neighbors = append(neighbors, map[string]interface{}{
+			"peerAddress": fmt.Sprintf("%s/32", bgpPeerAddr),
+			"peerASN":     bgpPeerAsn,
+		})
+	}
+
 	bgp := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "cilium.io/v2alpha1",
+		"apiVersion": "cilium.io/v2",
 		"kind":       "CiliumBGPPeeringPolicy",
 		"metadata": map[string]interface{}{
 			"name": vipasBGPPolicyName,
@@ -110,15 +126,20 @@ func (o *Orchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool st
 			},
 		},
 		"spec": map[string]interface{}{
+			"nodeSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"kubernetes.io/os": "linux",
+				},
+			},
 			"virtualRouters": []interface{}{
 				map[string]interface{}{
-					"localASN": defaultCiliumLocalASN,
+					"localASN": bgpLocalAsn,
 					"serviceSelector": map[string]interface{}{
 						"matchLabels": map[string]interface{}{
 							managedByLabel: managedByLabelValue,
 						},
 					},
-					"neighbors": []interface{}{},
+					"neighbors": neighbors,
 				},
 			},
 		},

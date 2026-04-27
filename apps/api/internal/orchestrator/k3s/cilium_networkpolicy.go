@@ -56,7 +56,25 @@ func (o *Orchestrator) EnsureCiliumNetworkPolicy(ctx context.Context, namespace 
 				"fromEndpoints": []interface{}{
 					map[string]interface{}{
 						"matchLabels": map[string]interface{}{
+							"kubernetes.io/metadata.name": "envoy-gateway-system",
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"fromEndpoints": []interface{}{
+					map[string]interface{}{
+						"matchLabels": map[string]interface{}{
 							"kubernetes.io/metadata.name": "kube-system",
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"fromEndpoints": []interface{}{
+					map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"kubernetes.io/metadata.name": "gateway-system",
 						},
 					},
 				},

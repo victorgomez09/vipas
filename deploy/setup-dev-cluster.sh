@@ -40,7 +40,7 @@ kind: L2AnnouncementPolicy
 metadata:
   name: vipas-l2-announcement
 spec:
-  serviceSelector:
+  nodeSelector:
     matchLabels:
       app.kubernetes.io/managed-by: "vipas"
   loadBalancerIPs: true

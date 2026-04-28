@@ -9,24 +9,24 @@ if ! systemctl is-active --quiet k3s; then
     sudo systemctl start k3s
 fi
 
-# 2. ESPERA ACTIVA: No continuar hasta que el puerto 6443 esté abierto
-# echo "Esperando a que el API Server esté listo..."
-# until curl -skf https://127.0.0.1:6443/version > /dev/null; do
-#     echo "Esperando por K3s (puerto 6443)..."
-#     sleep 2
-# done
-# echo "API Server disponible."
-
 # 3. Exportar KUBECONFIG
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 sudo chmod 644 $KUBECONFIG
 
+# Asegurar namespaces necesarios
+kubectl create ns gateway-system --dry-run=client -o yaml | kubectl apply -f -
+
 # 4. Instalar Cilium
 echo "Configurando Cilium..."
-cilium install --version 1.16.5 \
-  --kubeconfig /etc/rancher/k3s/k3s.yaml \
+cilium install \
+  --version 1.16.5 \
   --set l2announcements.enabled=true \
-  --set externalIPs.enabled=true
+  --set gatewayAPI.enabled=true \
+  --set envoy.enabled=true \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=127.0.0.1 \
+  --set k8sServicePort=6443 \
+  --set gatewayAPI.enabled=true
 
 # 4. Esperar a que el sistema esté listo
 echo "Esperando a que Cilium esté operativo..."
@@ -40,12 +40,22 @@ kind: L2AnnouncementPolicy
 metadata:
   name: vipas-l2-announcement
 spec:
-  nodeSelector:
+  serviceSelector: # Selecciona servicios con esta etiqueta
     matchLabels:
-      app.kubernetes.io/managed-by: "vipas"
+      app.kubernetes.io/managed-by: vipas
   loadBalancerIPs: true
   interfaces:
     - eth0
+EOF
+
+cat <<EOF | kubectl apply -f -
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: vipas-lb-pool
+spec:
+  blocks:
+  - cidr: "192.168.1.200/29"
 EOF
 
 echo "--- Entorno listo para desarrollar VIPAS ---"

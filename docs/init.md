@@ -17,9 +17,12 @@ curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/d
 sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
 rm cilium-linux-${CLI_ARCH}.tar.gz
 
+# Crear namespaces de infraestructura
+kubectl create ns gateway-system
+
 # Instalar cilium
 cilium install \
-  --version 1.19.3 \
+  --version 1.16.5 \
   --set l2announcements.enabled=true \
   --set gatewayAPI.enabled=true \
   --set envoy.enabled=true \
@@ -31,11 +34,11 @@ cilium install \
 cilium status --wait
 
 # Comprobar el estado de los pods
-kubectl get po -A
+kubectl get pods -A
 
 # Aplicar L2 annoucement
-kubectl apply -f deploy/manifests/cilium-l2-policy.yaml
-kubectl apply -f deploy/manifests/cilium-ip-pool.yaml
+# Las políticas de Cilium L2 Announcement y el pool de IPs se configuran automáticamente
+# por el instalador o el backend de Vipas.
 
 # Verificaciones
 kubectl get ciliuml2announcementpolicies.cilium.io -n kube-system

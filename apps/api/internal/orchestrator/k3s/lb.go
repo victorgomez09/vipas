@@ -18,8 +18,8 @@ import (
 var (
 	ciliumLBPoolGVR     = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliumloadbalancerippools"}
 	ciliumL2PolicyGVR   = schema.GroupVersionResource{Group: "cilium.io", Version: "v2alpha1", Resource: "ciliuml2announcementpolicies"}
-	vipasLBPoolName     = "vipas-lb-pool"
-	vipasL2PolicyName   = "vipas-l2-announcement"
+	vipasLBPoolName     = "vipas-lb-pool"         // Nombre del pool de IPs para Cilium Load Balancer
+	vipasL2PolicyName   = "vipas-l2-announcement" // Nombre de la política de anuncio L2
 	managedByLabel      = "app.kubernetes.io/managed-by"
 	managedByLabelValue = "vipas"
 )

@@ -33,7 +33,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 		return fmt.Errorf("create dynamic client: %w", err)
 	}
 
-	// Ensure gateway-system namespace exists
+	// Ensure the namespace for the Gateway and Envoy Proxy exists
 	if err := o.ensureNamespace(ctx, "gateway-system"); err != nil {
 		return fmt.Errorf("ensure gateway ns: %w", err)
 	}
@@ -115,44 +115,58 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 	}
 	o.logger.Info("gateway created", slog.String("name", gwName))
 
-	// Ensure Envoy dataplane service is exposed as a LoadBalancer so Cilium can assign
-	// an external IP reachable from the host. The dataplane runs in namespace
-	// `envoy-gateway-system` and pods are owned by the Gateway controller with labels
-	// `gateway.envoyproxy.io/owning-gateway-name=vipas-gateway` and
-	// `gateway.envoyproxy.io/owning-gateway-namespace=gateway-system`.
-	svcNS := "envoy-gateway-system"
-	// Ensure the namespace exists (installed by Helm normally)
-	_ = o.ensureNamespace(ctx, svcNS)
+	// The Envoy dataplane Service is automatically created by the controller but we
+	// need to ensure it's a LoadBalancer and has the 'vipas' label for Cilium L2.
+	// Naming pattern: envoy-<gateway-namespace>-<gateway-name>
+	svcNS := "gateway-system"
+	svcName := fmt.Sprintf("envoy-%s-%s", svcNS, gwName)
 
-	svcName := fmt.Sprintf("envoy-gateway-%s", gwName)
-	// Create Service if missing
-	if _, err := o.client.CoreV1().Services(svcNS).Get(ctx, svcName, metav1.GetOptions{}); k8serrors.IsNotFound(err) {
-		svc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      svcName,
-				Namespace: svcNS,
-				Labels: map[string]string{
-					"app.kubernetes.io/managed-by": "vipas",
+	upsertService := func() error {
+		svc, err := o.client.CoreV1().Services(svcNS).Get(ctx, svcName, metav1.GetOptions{})
+		if k8serrors.IsNotFound(err) {
+			// If the controller hasn't created it yet, we pre-create it with correct config.
+			// Envoy Gateway will adopt it.
+			newSvc := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      svcName,
+					Namespace: svcNS,
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "vipas",
+					},
 				},
-			},
-			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeLoadBalancer,
-				Selector: map[string]string{
-					"gateway.envoyproxy.io/owning-gateway-name":      gwName,
-					"gateway.envoyproxy.io/owning-gateway-namespace": "gateway-system",
+				Spec: corev1.ServiceSpec{
+					Type: corev1.ServiceTypeLoadBalancer,
+					Selector: map[string]string{
+						"gateway.envoyproxy.io/owning-gateway-name":      gwName,
+						"gateway.envoyproxy.io/owning-gateway-namespace": "gateway-system",
+					},
+					Ports: []corev1.ServicePort{
+						{Port: 80, TargetPort: intstrFromInt(80), Protocol: corev1.ProtocolTCP},
+						{Port: 443, TargetPort: intstrFromInt(443), Protocol: corev1.ProtocolTCP},
+					},
 				},
-				Ports: []corev1.ServicePort{
-					{Port: 80, TargetPort: intstrFromInt(80), Protocol: corev1.ProtocolTCP},
-					{Port: 443, TargetPort: intstrFromInt(443), Protocol: corev1.ProtocolTCP},
-				},
-			},
+			}
+			_, err = o.client.CoreV1().Services(svcNS).Create(ctx, newSvc, metav1.CreateOptions{})
+			return err
 		}
-		if _, err := o.client.CoreV1().Services(svcNS).Create(ctx, svc, metav1.CreateOptions{}); err != nil {
-			o.logger.Warn("failed to create envoy gateway Service", slog.Any("error", err))
-		} else {
-			o.logger.Info("created LoadBalancer Service for envoy gateway", slog.String("service", svcName), slog.String("ns", svcNS))
+		if err != nil {
+			return err
 		}
+
+		// Actualiza: asegura que la etiqueta para Cilium L2 esté presente y el tipo de servicio sea LoadBalancer
+		if svc.Labels == nil {
+			svc.Labels = make(map[string]string)
+		}
+		svc.Labels["app.kubernetes.io/managed-by"] = "vipas"
+		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
+		_, err = o.client.CoreV1().Services(svcNS).Update(ctx, svc, metav1.UpdateOptions{})
+		return err
 	}
+
+	if err := upsertService(); err != nil {
+		o.logger.Warn("failed to ensure envoy gateway Service labels", slog.Any("error", err))
+	}
+
 	return nil
 }
 

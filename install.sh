@@ -241,7 +241,7 @@ install_cilium() {
     helm repo update >/dev/null 2>&1 || true
 
         # Pin a tested Cilium version for production (update as needed)
-        CILIUM_HELM_VERSION="v1.14.0"
+        CILIUM_HELM_VERSION="1.16.5"
 
         info "Installing Cilium (this may take a few minutes)..."
         export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -268,7 +268,7 @@ install_cilium() {
             --set k8sServiceHost=${K8S_SERVICE_HOST} \
             --set k8sServicePort=${K8S_SERVICE_PORT} \
             --set encryption.enabled=${ENCRYPTION} \
-            ${CILIUM_EXTRA_HELM_ARGS} >/dev/null 2>&1 || warn "Helm install/upgrade returned non-zero (check logs)"
+            ${CILIUM_EXTRA_HELM_ARGS} || warn "Helm install/upgrade returned non-zero (check logs)"
 
     # Validation: prefer `cilium status --wait` if cilium CLI is present
     if command -v cilium >/dev/null 2>&1; then
@@ -300,21 +300,14 @@ configure_cilium_lb() {
 
     if [ -z "$LB_TYPE" ]; then
         NODE_COUNT=$(k3s kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d '[:space:]')
-        if [ "${NODE_COUNT:-0}" -le 1 ]; then
-            LB_TYPE="cilium-l2"
-        else
-            LB_TYPE="cilium-bgp"
-        fi
+        LB_TYPE="cilium-l2"
         info "LB_TYPE not set, inferred ${LB_TYPE} from topology (${NODE_COUNT} node/s)"
     fi
 
-    case "$LB_TYPE" in
-        cilium-l2|cilium-bgp|nodeport) ;;
-        *)
-            warn "Unsupported LB_TYPE=${LB_TYPE}. Allowed: cilium-l2 | cilium-bgp | nodeport"
-            return
-            ;;
-    esac
+    if [ "$LB_TYPE" != "cilium-l2" ] && [ "$LB_TYPE" != "nodeport" ]; then
+        warn "Unsupported LB_TYPE=${LB_TYPE}. Allowed: cilium-l2 | nodeport"
+        return
+    fi
 
     if [ "$LB_TYPE" = "nodeport" ]; then
         info "LB_TYPE=nodeport, skipping Cilium LB resources"
@@ -344,30 +337,8 @@ configure_cilium_lb() {
         else
             ok "Cilium L2 announcement configured"
         fi
-        k3s kubectl delete ciliumbgppeeringpolicy vipas-bgp-peering --ignore-not-found >/dev/null 2>&1 || true
         return
     fi
-
-    # cilium-bgp mode
-    BGP_LOCAL_ASN="${BGP_LOCAL_ASN:-64512}"
-    BGP_PEER_ADDRESS="${BGP_PEER_ADDRESS:-}"
-    BGP_PEER_ASN="${BGP_PEER_ASN:-}"
-
-    if [ -z "$BGP_PEER_ADDRESS" ] || [ -z "$BGP_PEER_ASN" ]; then
-        warn "BGP mode selected but BGP_PEER_ADDRESS/BGP_PEER_ASN not set. Pool created; peer setup remains pending."
-        return
-    fi
-
-    info "Applying Cilium BGP peering policy (${BGP_PEER_ADDRESS}, ASN ${BGP_PEER_ASN})"
-    TMP_BGP=$(mktemp)
-    sed "s|\${BGP_LOCAL_ASN}|${BGP_LOCAL_ASN}|g; s|\${BGP_PEER_ADDRESS}|${BGP_PEER_ADDRESS}|g; s|\${BGP_PEER_ASN}|${BGP_PEER_ASN}|g" deploy/manifests/cilium-bgp-peering-policy.yaml > "$TMP_BGP"
-    if ! k3s kubectl apply -f "$TMP_BGP" >/dev/null 2>&1; then
-        warn "Failed to apply CiliumBGPPeeringPolicy"
-    else
-        ok "Cilium BGP peering policy applied"
-    fi
-    rm -f "$TMP_BGP"
-    k3s kubectl delete ciliuml2announcementpolicy vipas-l2-announcement --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ── Install Gateway API CRDs ────────────────────────────────────

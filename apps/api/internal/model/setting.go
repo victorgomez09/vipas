@@ -17,7 +17,7 @@ const (
 	SettingPanelDomain = "panel_domain" // domain for the Vipas panel (e.g. "panel.example.com")
 	SettingHTTPSEmail  = "https_email"  // email for Let's Encrypt ACME certificates
 	SettingCertIssuer  = "cert_issuer"  // letsencrypt-staging | letsencrypt-prod | selfsigned
-	SettingLBType      = "lb_type"      // cilium-l2 | cilium-bgp | nodeport
+	SettingLBType      = "lb_type"      // cilium-l2 | nodeport
 	SettingLBIPPool    = "lb_ip_pool"   // CIDR for CiliumLoadBalancerIPPool
 	SettingGatewayIP   = "gateway_ip"   // external IP assigned to the Envoy Gateway Service
 	SettingK3sAPIVIP   = "k3s_api_vip"  // VIP for K3s API server in HA mode (e.g. 10.0.0.10)

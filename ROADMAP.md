@@ -15,7 +15,7 @@
 | **CNI** | Cilium (eBPF) | Cilium (eBPF) |
 | **Gateway** | Envoy Gateway + `HTTPRoute` | Envoy Gateway + `HTTPRoute` |
 | **TLS** | cert-manager (self-signed / sslip.io sin TLS) | cert-manager + Let's Encrypt |
-| **Load Balancer** | Cilium L2 Announcement | Cilium BGP |
+| **Load Balancer** | Cilium L2 Announcement | Cilium L2 Announcement |
 | **Storage** | `local-path` de K3s | Longhorn (replicado ×3) |
 | **PostgreSQL** | StatefulSet simple | CloudNativePG (HA) |
 | **Control Plane HA** | No (1 nodo) | Sí (quorum etcd 3 nodos) |
@@ -231,25 +231,24 @@
 
 - [x] **3.1** Elegir implementación:
   - [x] **3.1.a** Eliminar MetalLB del flujo de instalación y de manifiestos
-  - [x] **3.1.b** Estándar único en Cilium: `cilium-l2` (dev) / `cilium-bgp` (prod)
+- [x] **3.1.b** Estándar único en Cilium: `cilium-l2`
 - [x] **3.2** Configurar Cilium LB en instalación:
   - `install.sh` ahora aplica recursos de Cilium LB y autodetecta modo según topología (número de nodos)
-  - Si `LB_TYPE` no está definido: `cilium-l2` en dev, `cilium-bgp` en prod
+  - Si `LB_TYPE` no está definido: `cilium-l2`
 - [x] **3.3** Crear `CiliumLoadBalancerIPPool` con el rango de IPs públicas disponibles
 - [x] **3.4** Configuración de anuncio:
   - Dev: `CiliumL2AnnouncementPolicy`
-  - Prod: `CiliumBGPPeeringPolicy` (requiere `BGP_PEER_ADDRESS` y `BGP_PEER_ASN`)
 - [ ] **3.5** Configurar ECMP en el router upstream para distribuir tráfico entre nodos gateway
   - Pendiente de infraestructura externa (router físico/virtual)
 - [x] **3.6** Ajustar modelo `Setting` para Cilium LB:
-  - `lb_type` → `cilium-l2 | cilium-bgp | nodeport`
+  - `lb_type` → `cilium-l2 | nodeport`
   - `lb_ip_pool` → rango CIDR del pool de IPs
 - [x] **3.7** Actualizar `setting_service.go` para gestionar la configuración del LB
-  - Normaliza valores legacy (`metallb` -> `cilium-bgp`)
+  - Normaliza valores legacy
   - Valida tipos permitidos
-  - Infiera y persiste modo por topología cuando no existe `lb_type`
+  - Infiera y persiste `cilium-l2` cuando no existe `lb_type`
 - [x] **3.8** Endpoint `GET /api/v1/infra/lb/status`
-  - Reporta IPs asignadas, pools de Cilium y peers BGP detectados
+  - Reporta IPs asignadas y pools de Cilium
 
 ---
 
@@ -335,11 +334,6 @@
   - [x] **6.2.1** Habilitar Hubble relay/UI en la instalación de Cilium (helm values) — ya habilitado en `install.sh` values
   - [x] **6.2.2** Exponer la UI de Hubble en el panel de Vipas (ingress/route o HTTPRoute) — pendiente routing; configuraciones añadidas
   - [x] **6.2.3** Conectar Hubble observability con métricas/alertas (Prometheus/Grafana) — instrumentación preparada
-
- - [x] **6.3** Configurar Cilium BGP (cuando aplique en multi-nodo):
-  - [x] **6.3.1** Crear `CiliumBGPPeeringPolicy` para anunciar rangos IP a routers — añadido ejemplo en `deploy/manifests/cilium/cilium-bgppolicy.yaml`
-  - [x] **6.3.2** Crear `CiliumLoadBalancerIPPool` con el rango de IPs públicas disponibles — añadido ejemplo en `deploy/manifests/cilium/cilium-ippool.yaml`
-  - [x] **6.3.3** Documentar flujo de failover/ECMP para routers upstream — documentación inicial en `deploy/` 
 
 ---
 
@@ -504,12 +498,12 @@ Fase 3   ──► Fase 13  Documentación y runbooks
 | Componente | Tecnología | Dev (1 nodo) | Prod (multi-nodo) |
 |---|---|---|---|
 | Distribución K8s | K3s | ✓ | K3s HA (×3 CP) o RKE2 |
-| CNI | Cilium (eBPF) | básico | L7 + Hubble + BGP |
+| CNI | Cilium (eBPF) | básico | L7 + Hubble |
 | kube-proxy | Eliminado | ✓ | ✓ |
 | Gateway Controller | Envoy Gateway | ✓ | ✓ (nodos dedicados) |
 | Gateway dataplane | Envoy Proxy | 1 pod | DaemonSet en nodos GW |
 | TLS | cert-manager | self-signed / sin TLS (sslip.io) | Let's Encrypt prod |
-| Load Balancer | — | Cilium L2 Announcement | Cilium BGP |
+| Load Balancer | — | Cilium L2 Announcement | Cilium L2 Announcement |
 | DNS automático | external-dns | no (sslip.io manual) | ✓ |
 | Network Policy | CiliumNetworkPolicy | básica | L3/L4/L7 + FQDN egress |
 | Observabilidad | Prometheus + Grafana | opcional | ✓ |

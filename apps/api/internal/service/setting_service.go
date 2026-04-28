@@ -146,7 +146,7 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 	if key == model.SettingLBType {
 		normalized := normalizeLBType(value)
 		if value != "" && normalized == "" {
-			return fmt.Errorf("invalid lb_type: %q (allowed: cilium-l2, cilium-bgp, nodeport)", value)
+			return fmt.Errorf("invalid lb_type: %q (allowed: cilium-l2, nodeport)", value)
 		}
 		value = normalized
 	}
@@ -277,15 +277,7 @@ func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ip
 }
 
 func (s *SettingService) defaultLBTypeByTopology(ctx context.Context) string {
-	nodes, err := s.orch.GetNodes(ctx)
-	if err != nil {
-		s.logger.Debug("defaultLBTypeByTopology: could not read nodes", slog.Any("error", err))
-		return "cilium-l2"
-	}
-	if len(nodes) <= 1 {
-		return "cilium-l2"
-	}
-	return "cilium-bgp"
+	return "cilium-l2"
 }
 
 func normalizeLBType(v string) string {
@@ -296,13 +288,7 @@ func normalizeLBType(v string) string {
 	if v == "l2" || v == "cilium-l2-announcement" {
 		return "cilium-l2"
 	}
-	if v == "bgp" || v == "cilium" {
-		return "cilium-bgp"
-	}
-	if v == "metallb" {
-		return "cilium-bgp"
-	}
-	if slices.Contains([]string{"cilium-l2", "cilium-bgp", "nodeport"}, v) {
+	if slices.Contains([]string{"cilium-l2", "nodeport"}, v) {
 		return v
 	}
 	return ""

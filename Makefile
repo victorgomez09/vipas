@@ -1,30 +1,8 @@
 # Makefile para flujos de desarrollo local
 # Targets:
-#  - make k3d-create    -> crea un cluster k3d recomendado para Vipas
-#  - make k3d-delete    -> elimina el cluster k3d creado
 #  - make setup-cluster -> ejecuta deploy/setup-dev-cluster.sh
 
-.PHONY: k3d-create k3d-delete setup-cluster
-
-K3D_CLUSTER ?= vipas
-
-k3d-create:
-	@command -v k3d >/dev/null 2>&1 || (echo "k3d not found; install from https://k3d.io" && exit 1)
-	@echo "Creating k3d cluster '$(K3D_CLUSTER)' (ports 80/443/6443, mounting /lib/modules)..."
-	@k3d cluster create $(K3D_CLUSTER) \
-		--servers 1 \
-		--agents 0 \
-		-p "80:80@server:0" \
-		-p "443:443@server:0" \
-		-p "6443:6443@server:0" \
-		--k3s-arg "--disable=traefik@server:0" \
-		--k3s-arg "--write-kubeconfig-mode=644@server:0" \
-		--volume /lib/modules:/lib/modules@server:0
-
-k3d-delete:
-	@command -v k3d >/dev/null 2>&1 || (echo "k3d not found" && exit 1)
-	@echo "Deleting k3d cluster '$(K3D_CLUSTER)'..."
-	@k3d cluster delete $(K3D_CLUSTER) || true
+.PHONY: setup-cluster
 
 setup-cluster:
 	@echo "Running deploy/setup-dev-cluster.sh (may require sudo for host-level changes)"

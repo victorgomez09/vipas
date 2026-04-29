@@ -135,7 +135,8 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 					},
 				},
 				Spec: corev1.ServiceSpec{
-					Type: corev1.ServiceTypeLoadBalancer,
+					Type:                  corev1.ServiceTypeLoadBalancer,
+					ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeCluster,
 					Selector: map[string]string{
 						"gateway.envoyproxy.io/owning-gateway-name":      gwName,
 						"gateway.envoyproxy.io/owning-gateway-namespace": "gateway-system",
@@ -159,6 +160,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 		}
 		svc.Labels["app.kubernetes.io/managed-by"] = "vipas"
 		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
+		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeCluster
 		_, err = o.client.CoreV1().Services(svcNS).Update(ctx, svc, metav1.UpdateOptions{})
 		return err
 	}

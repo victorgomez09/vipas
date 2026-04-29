@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: vipas
       POSTGRES_PASSWORD: vipas
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vipas"]

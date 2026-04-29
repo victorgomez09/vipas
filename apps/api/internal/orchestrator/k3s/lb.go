@@ -68,31 +68,28 @@ func (o *Orchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPool st
 		return fmt.Errorf("ensure cilium lb pool: %w", err)
 	}
 
-	if lbType == "cilium-l2" {
-		l2 := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "cilium.io/v2alpha1",
-			"kind":       "CiliumL2AnnouncementPolicy",
-			"metadata": map[string]interface{}{
-				"name": vipasL2PolicyName,
-				"labels": map[string]interface{}{
+	l2 := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "cilium.io/v2alpha1",
+		"kind":       "CiliumL2AnnouncementPolicy",
+		"metadata": map[string]interface{}{
+			"name": vipasL2PolicyName,
+			"labels": map[string]interface{}{
+				managedByLabel: managedByLabelValue,
+			},
+		},
+		"spec": map[string]interface{}{
+			"serviceSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{
 					managedByLabel: managedByLabelValue,
 				},
 			},
-			"spec": map[string]interface{}{
-				"serviceSelector": map[string]interface{}{
-					"matchLabels": map[string]interface{}{
-						managedByLabel: managedByLabelValue,
-					},
-				},
-				"loadBalancerIPs": true,
-			},
-		}}
-		if err := upsertClusterResource(ctx, dyn, ciliumL2PolicyGVR, vipasL2PolicyName, l2); err != nil {
-			return fmt.Errorf("ensure cilium l2 announcement policy: %w", err)
-		}
-		o.logger.Info("configured cilium l2 load balancer", slog.String("pool", ipPool))
-		return nil
+			"loadBalancerIPs": true,
+		},
+	}}
+	if err := upsertClusterResource(ctx, dyn, ciliumL2PolicyGVR, vipasL2PolicyName, l2); err != nil {
+		return fmt.Errorf("ensure cilium l2 announcement policy: %w", err)
 	}
+	o.logger.Info("configured cilium l2 load balancer", slog.String("pool", ipPool))
 
 	return nil
 }

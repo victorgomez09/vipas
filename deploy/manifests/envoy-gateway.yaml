@@ -1,0 +1,68 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: vipas-proxy
+    namespace: gateway-system
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: vipas-gateway
+  namespace: gateway-system
+  labels:
+    app.kubernetes.io/managed-by: vipas
+spec:
+  gatewayClassName: envoy-gateway
+  infrastructure:
+    annotations:
+      "lbipam.cilium.io/ips": "192.168.0.193"
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: vipas-proxy
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    # - name: https
+    #   port: 443
+    #   protocol: HTTPS
+    #   tls:
+    #     mode: Terminate
+    #   allowedRoutes:
+    #     namespaces:
+    #       from: All
+---
+# apiVersion: gateway.envoyproxy.io/v1alpha1
+# kind: EnvoyPatchPolicy
+# metadata:
+#   name: vipas-node-patch
+#   namespace: gateway-system
+# spec:
+#   targetRefs:
+#   - group: gateway.envoyproxy.io
+#     kind: EnvoyProxy
+#     name: vipas-proxy
+#   jsonPatches:
+#   - type: JSONPatch
+#     operation: add
+#     path: /spec/template/spec/nodeSelector
+#     value:
+#       vipas/pool: gateway
+#   - type: JSONPatch
+#     operation: add
+#     path: /spec/template/spec/tolerations
+#     value:
+#     - key: role
+#       value: gateway
+#       effect: NoSchedule

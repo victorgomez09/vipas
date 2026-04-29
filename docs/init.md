@@ -25,11 +25,10 @@ cilium install \
   --version 1.16.5 \
   --set l2announcements.enabled=true \
   --set gatewayAPI.enabled=true \
-  --set envoy.enabled=true \
   --set kubeProxyReplacement=true \
   --set k8sServiceHost=127.0.0.1 \
   --set k8sServicePort=6443 \
-  --set gatewayAPI.enabled=true
+  <!-- --set envoy.enabled=true \ -->
 
 cilium status --wait
 
@@ -50,3 +49,5 @@ kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.2.0"
 
 # Verificar
 kubectl get crd | grep gateway.networking.k8s.io
+
+https://surajremanan.com/posts/migrating-ingress-nginx-to-gateway-api/

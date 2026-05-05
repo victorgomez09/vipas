@@ -583,13 +583,13 @@ export function Sidebar() {
             collapsed={collapsed}
             badge={alertCount}
           />
-          <NavItem
+          {/*<NavItem
             href="/traefik"
             icon={Network}
             label="Traefik"
             isActive={location.pathname === "/traefik"}
             collapsed={collapsed}
-          />
+          />*/}
           <NavItem
             href="/volumes"
             icon={HardDrive}

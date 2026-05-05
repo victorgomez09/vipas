@@ -19,7 +19,7 @@ type Domain struct {
 
 	ForceHTTPS bool       `bun:"force_https" json:"force_https"`
 	CertExpiry *time.Time `bun:"cert_expiry" json:"cert_expiry,omitempty"`
-	RouteReady bool       `bun:"ingress_ready" json:"route_ready"`
+	RouteReady bool       `bun:"route_ready" json:"route_ready"`
 
 	// AutoDNS indicates that an external-dns provider is configured and the
 	// platform will attempt to create the A record automatically. This field

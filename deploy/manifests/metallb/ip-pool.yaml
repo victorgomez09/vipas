@@ -1,0 +1,15 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: vipas-pool
+  namespace: metallb-system
+spec:
+  # Rango basado en tu interfaz eth0 (172.22.230.35/20)
+  addresses:
+  - 172.22.230.240-172.22.230.250
+  autoAssign: true
+  # Filtro para que solo tus apps de "vipas" usen estas IPs
+  serviceAllocation:
+    namespaceSelectors:
+      - matchLabels:
+          app.kubernetes.io/managed-by: "vipas"

@@ -179,7 +179,7 @@ func init() {
 				cert_secret VARCHAR(255) DEFAULT '',
 				force_https BOOLEAN DEFAULT false,
 				cert_expiry TIMESTAMPTZ DEFAULT NULL,
-				ingress_ready BOOLEAN DEFAULT false,
+				route_ready BOOLEAN DEFAULT false,
 				created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				deleted_at TIMESTAMPTZ

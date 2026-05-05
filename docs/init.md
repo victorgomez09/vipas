@@ -1,3 +1,5 @@
+sudo /usr/local/bin/k3s-uninstall.sh
+
 # Instalar K3s
 curl -sfL https://get.k3s.io | sh -s - \
   --flannel-backend=none \
@@ -24,11 +26,15 @@ kubectl create ns gateway-system
 cilium install \
   --version 1.16.5 \
   --set l2announcements.enabled=true \
-  --set gatewayAPI.enabled=true \
   --set kubeProxyReplacement=true \
   --set k8sServiceHost=127.0.0.1 \
   --set k8sServicePort=6443 \
+  --set gatewayAPI.enabled=true
   <!-- --set envoy.enabled=true \ -->
+
+o
+
+helm install cilium oci://quay.io/cilium/charts/cilium   --version 1.19.3   --namespace kube-system   --set ipam.mode=kubernetes   --set kubeProxyReplacement=true   --set l2announcements.enabled=true   --set externalIPs.enabled=true   --set hubble.relay.enabled=true   --set hubble.ui.enabled=true
 
 cilium status --wait
 

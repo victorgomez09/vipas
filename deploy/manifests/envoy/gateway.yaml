@@ -1,0 +1,49 @@
+---
+# 1. DEFINICIÓN DEL PROXY (CÓMO ES EL MÚSCULO)
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: vipas-proxy-config
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+---
+# 2. LA CLASE (QUIÉN MANDA)
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: vipas-gateway-class
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: vipas-proxy-config
+    namespace: envoy-gateway-system
+---
+# 3. EL GATEWAY (EL PUNTO DE ENCUENTRO CON METALLB)
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: vipas-gateway
+  namespace: envoy-gateway-system
+spec:
+  gatewayClassName: vipas-gateway-class
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+  infrastructure:
+    annotations:
+      # AQUÍ ES DONDE METALLB SE ENTERA
+      metallb.universe.tf/address-pool: vipas-pool
+    labels:
+      # TU FILTRO DE SEGURIDAD
+      vipas-service-type: "external-proxy"

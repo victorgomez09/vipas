@@ -94,7 +94,7 @@ func (o *Orchestrator) CreateHTTPRoute(ctx context.Context, domain *model.Domain
 		},
 		"spec": map[string]interface{}{
 			"parentRefs": []interface{}{
-				map[string]interface{}{"name": "vipas-gateway", "namespace": "gateway-system", "sectionName": "http"},
+				map[string]interface{}{"name": "vipas-gateway", "namespace": "envoy-gateway-system", "sectionName": "http"},
 			},
 			"hostnames": []interface{}{domain.Host},
 			"rules": []interface{}{

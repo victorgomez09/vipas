@@ -495,7 +495,7 @@ export function Sidebar() {
           <Logo className="h-7 w-7 shrink-0 text-primary" />
           {!collapsed && (
             <span className="text-[17px] font-bold leading-none tracking-tight">
-              Sail<span className="font-medium text-muted-foreground">box</span>
+              VI<span className="font-medium text-muted-foreground">PAAS</span>
             </span>
           )}
         </Link>

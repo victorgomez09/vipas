@@ -31,6 +31,8 @@ kind: Gateway
 metadata:
   name: vipas-gateway
   namespace: envoy-gateway-system
+  annotations:
+    external-dns.alpha.kubernetes.io/target: dns.esmosolutions.es
 spec:
   gatewayClassName: vipas-gateway-class
   listeners:

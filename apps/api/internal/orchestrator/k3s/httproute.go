@@ -170,8 +170,8 @@ func (o *Orchestrator) CreateHTTPRoute(ctx context.Context, domain *model.Domain
 				"spec": map[string]interface{}{
 					"secretName": secretName,
 					"dnsNames":   []interface{}{domain.Host},
-					// Default to letsencrypt-staging; cluster admin can change SettingCertIssuer later
-					"issuerRef": map[string]interface{}{"name": "letsencrypt-staging", "kind": "ClusterIssuer"},
+					// Default to letsencrypt-prod; cluster admin can change SettingCertIssuer later
+					"issuerRef": map[string]interface{}{"name": "letsencrypt-prod", "kind": "ClusterIssuer"},
 				},
 			}}
 

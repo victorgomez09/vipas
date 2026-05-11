@@ -104,7 +104,7 @@ func main() {
 	// Orchestrator — real K3s if kubeconfig available, otherwise noop fallback
 	var orch orch_iface.Orchestrator
 	if cfg.K8s.InCluster || cfg.K8s.Kubeconfig != "" {
-		orch, err = k3s.New(cfg.K8s, logger)
+		orch, err = k3s.New(cfg.K8s, store, logger)
 		if err != nil {
 			logger.Warn("K3s connection failed, falling back to noop", slog.Any("error", err))
 			orch = orch_iface.NewNoop(logger)

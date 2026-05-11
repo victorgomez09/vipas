@@ -146,7 +146,7 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 	if key == model.SettingLBType {
 		normalized := normalizeLBType(value)
 		if value != "" && normalized == "" {
-			return fmt.Errorf("invalid lb_type: %q (allowed: cilium-l2, nodeport)", value)
+			return fmt.Errorf("invalid lb_type: %q (allowed: metallb, nodeport)", value)
 		}
 		value = normalized
 	}
@@ -263,13 +263,15 @@ func (s *SettingService) applyCertIssuer(ctx context.Context, issuer string) err
 func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ipPool string) error {
 	if lbType == "" {
 		lbType = s.defaultLBTypeByTopology(ctx)
-		if err := s.store.Settings().Set(ctx, model.SettingLBType, lbType); err != nil {
+		if err := s.store.Settings().Set(ctx, model.SettingLBType, lbType); err == nil {
+			s.logger.Info("persisted default lb_type", slog.String("type", lbType))
+		} else {
 			s.logger.Warn("failed to persist inferred lb_type", slog.Any("error", err), slog.String("lb_type", lbType))
 		}
 	}
 
 	ipPool = strings.TrimSpace(ipPool)
-	if (lbType == "cilium-l2" || lbType == "cilium-bgp") && ipPool == "" {
+	if lbType == "metallb" && ipPool == "" {
 		return fmt.Errorf("lb_ip_pool is required for %s", lbType)
 	}
 
@@ -277,7 +279,7 @@ func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ip
 }
 
 func (s *SettingService) defaultLBTypeByTopology(ctx context.Context) string {
-	return "cilium-l2"
+	return "metallb"
 }
 
 func normalizeLBType(v string) string {
@@ -285,10 +287,10 @@ func normalizeLBType(v string) string {
 	if v == "" {
 		return ""
 	}
-	if v == "l2" || v == "cilium-l2-announcement" {
-		return "cilium-l2"
+	if v == "l2" || v == "metallb-l2" {
+		return "metallb"
 	}
-	if slices.Contains([]string{"cilium-l2", "nodeport"}, v) {
+	if slices.Contains([]string{"metallb", "nodeport"}, v) {
 		return v
 	}
 	return ""

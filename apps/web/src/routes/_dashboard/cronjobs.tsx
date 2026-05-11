@@ -135,9 +135,8 @@ function CronJobRow({ cronJob: cj, onDelete }: { cronJob: CronJob; onDelete: () 
   return (
     <Card className="group transition-colors hover:bg-accent/50">
       <CardContent className="p-0">
-        <button
-          type="button"
-          className="flex w-full items-center gap-4 p-4 text-left"
+        <div
+          className="flex w-full items-center gap-4 p-4 text-left cursor-pointer"
           onClick={() => setExpanded(!expanded)}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -205,7 +204,7 @@ function CronJobRow({ cronJob: cj, onDelete }: { cronJob: CronJob; onDelete: () 
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
           </div>
-        </button>
+        </div>
 
         {expanded && (
           <div className="border-t px-4 py-3">

@@ -240,9 +240,8 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
   return (
     <Card>
       <CardContent className="p-0">
-        <button
-          type="button"
-          className="flex w-full items-center gap-4 p-4 text-left hover:bg-muted/50"
+        <div
+          className="flex w-full items-center gap-4 p-4 text-left hover:bg-muted/50 cursor-pointer"
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? (
@@ -263,7 +262,7 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
                 </span>
               )}
               {imageName && (
-                <Badge variant="outline" className="max-w-[200px] truncate text-xs">
+                <Badge variant="outline" className="max-w-[500px] truncate text-xs">
                   <Container className="mr-1 h-3 w-3" />
                   {imageName}
                 </Badge>
@@ -290,16 +289,17 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
           {deployment.status === "success" && (
             <Button
               size="sm"
-              variant="ghost"
+              variant="secondary"
               onClick={(e) => {
                 e.stopPropagation();
                 redeploy.mutate(undefined);
               }}
             >
+              Rollback
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
           )}
-        </button>
+        </div>
 
         {/* Expanded build log */}
         {expanded && (

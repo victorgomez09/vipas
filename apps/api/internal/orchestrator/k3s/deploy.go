@@ -84,9 +84,6 @@ func (o *Orchestrator) Deploy(ctx context.Context, app *model.Application, opts 
 			Protocol:      proto,
 		})
 	}
-	if len(containerPorts) == 0 {
-		containerPorts = []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}
-	}
 
 	// Build env vars
 	var envVars []corev1.EnvVar
@@ -266,14 +263,15 @@ func (o *Orchestrator) Deploy(ctx context.Context, app *model.Application, opts 
 		return fmt.Errorf("deploy: %w", err)
 	}
 
-	// Ensure Service with full port mapping
-	if err := o.ensureService(ctx, ns, name, labels, opts.Ports); err != nil {
-		return fmt.Errorf("service update failed: %w", err)
-	}
-
-	// Sync route backend ports if they changed
-	if err := o.SyncHTTPRoutePorts(ctx, app); err != nil {
-		return fmt.Errorf("route port sync failed: %w", err)
+	// Only ensure Service and Sync Routes if the app has ports defined.
+	// This allows "worker" or "tool" apps without networking.
+	if len(opts.Ports) > 0 {
+		if err := o.ensureService(ctx, ns, name, labels, opts.Ports); err != nil {
+			return fmt.Errorf("service update failed: %w", err)
+		}
+		if err := o.SyncHTTPRoutePorts(ctx, app); err != nil {
+			return fmt.Errorf("route port sync failed: %w", err)
+		}
 	}
 
 	o.logger.Info("deployed to K3s", slog.String("name", name), slog.String("ns", ns), slog.String("image", opts.Image))

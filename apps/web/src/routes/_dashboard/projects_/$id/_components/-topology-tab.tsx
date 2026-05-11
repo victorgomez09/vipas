@@ -109,49 +109,52 @@ export function TopologyTab({
           </FlowNode>
         </div>
 
-        <FlowArrow />
-
-        {/* Service */}
-        <div className="flex-1">
-          <FlowNode icon={Network} title="Service">
-            <p className="font-mono text-xs">{app.k8s_name || app.name}</p>
-            {ports.map((p, i) => (
-              <p key={i} className="mt-0.5 text-xs text-muted-foreground">
-                :{p.container_port} → :{p.service_port} / {p.protocol}
-              </p>
-            ))}
-          </FlowNode>
-        </div>
-
-        <FlowArrow />
-
-        {/* Routes / Domains */}
-        <div className="flex-1">
-          <FlowNode icon={Globe} title={`Domains (${domains.length})`}>
-            {domains.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No domains configured</p>
-            ) : (
-              <div className="space-y-1.5">
-                {domains.map((d) => (
-                  <div key={d.id} className="flex items-center gap-1.5">
-                    {d.tls && <Lock className="h-3 w-3 text-green-500" />}
-                    <a
-                      href={`${d.tls ? "https" : "http"}://${d.host}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="truncate text-xs text-primary hover:underline"
-                    >
-                      {d.host}
-                    </a>
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${d.route_ready ? "bg-green-500" : "bg-yellow-500"}`}
-                    />
-                  </div>
+        {ports.length > 0 && (
+          <>
+            <FlowArrow />
+            {/* Service */}
+            <div className="flex-1">
+              <FlowNode icon={Network} title="Service">
+                <p className="font-mono text-xs">{app.k8s_name || app.name}</p>
+                {ports.map((p, i) => (
+                  <p key={i} className="mt-0.5 text-xs text-muted-foreground">
+                    :{p.container_port} → :{p.service_port} / {p.protocol}
+                  </p>
                 ))}
-              </div>
-            )}
-          </FlowNode>
-        </div>
+              </FlowNode>
+            </div>
+
+            <FlowArrow />
+
+            {/* Routes / Domains */}
+            <div className="flex-1">
+              <FlowNode icon={Globe} title={`Domains (${domains.length})`}>
+                {domains.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No domains configured</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {domains.map((d) => (
+                      <div key={d.id} className="flex items-center gap-1.5">
+                        {d.tls && <Lock className="h-3 w-3 text-green-500" />}
+                        <a
+                          href={`${d.tls ? "https" : "http"}://${d.host}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate text-xs text-primary hover:underline"
+                        >
+                          {d.host}
+                        </a>
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${d.route_ready ? "bg-green-500" : "bg-yellow-500"}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </FlowNode>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Vertical flow — small screens */}

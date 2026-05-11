@@ -526,9 +526,7 @@ function ResourcesCard({ app, appId }: { app: App; appId: string }) {
 function PortsCard({ app, appId }: { app: App; appId: string }) {
   const updateApp = useUpdateApp(appId);
   const [ports, setPorts] = useState<PortMapping[]>(
-    app.ports?.length
-      ? app.ports
-      : [{ container_port: 3000, service_port: 3000, protocol: "tcp" as const }],
+    app.ports || []
   );
 
   const serialize = (p: PortMapping[]) =>
@@ -549,10 +547,6 @@ function PortsCard({ app, appId }: { app: App; appId: string }) {
 
   function handleSave() {
     const valid = ports.filter((p) => p.container_port > 0 && p.service_port > 0);
-    if (valid.length === 0) {
-      toast.error("At least one port mapping is required");
-      return;
-    }
     updateApp.mutate({ ports: valid });
   }
 
@@ -610,7 +604,7 @@ function PortsCard({ app, appId }: { app: App; appId: string }) {
               variant="ghost"
               className="mb-0.5 h-8 w-8 shrink-0 text-destructive"
               onClick={() => setPorts(ports.filter((_, j) => j !== i))}
-              disabled={ports.length <= 1}
+              // disabled={ports.length <= 1}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>

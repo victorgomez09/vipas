@@ -366,7 +366,7 @@ function ServiceRow({
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={() => deploy.mutate()}
+              onClick={() => deploy.mutate({})}
               disabled={deploy.isPending}
             >
               <Rocket className="h-3.5 w-3.5" />
@@ -882,13 +882,15 @@ function DbFormFields({
   const versions = rawVersions ?? [];
 
   // Auto-select recommended version when engine changes and versions load
-  if (versions.length > 0 && !versions.some((v) => v.tag === form.version)) {
-    const recommended = versions.find((v) => v.is_recommended);
-    const fallback = recommended?.tag ?? versions[0]?.tag ?? "";
-    if (fallback && fallback !== form.version) {
-      onChange({ ...form, version: fallback });
+  useEffect(() => {
+    if (versions.length > 0 && !versions.some((v) => v.tag === form.version)) {
+      const recommended = versions.find((v) => v.is_recommended);
+      const fallback = recommended?.tag ?? versions[0]?.tag ?? "";
+      if (fallback && fallback !== form.version) {
+        onChange({ ...form, version: fallback });
+      }
     }
-  }
+  }, [versions, form.version, onChange]);
 
   return (
     <>

@@ -75,6 +75,7 @@ import {
   useTeamMembers,
   useUpdateMemberRole,
 } from "@/hooks/use-team";
+import { api } from "@/lib/api";
 import type {
   Invitation,
   NotificationChannel,
@@ -410,6 +411,7 @@ function PanelDomainDialog({
 function GeneralTab() {
   const { data: settings, isLoading } = useSettings();
   const saveDomain = useUpdateSetting();
+  const saveLBSetting = useUpdateSetting(); // Llama al Hook aquí, al nivel superior
   const savePanel = useUpdateSetting();
   const saveEmail = useUpdateSetting();
   const saveDNS = useUpdateSetting();
@@ -436,20 +438,23 @@ function GeneralTab() {
   if (isLoading) return <LoadingScreen />;
   if (!settings) return null;
 
+  const dnsDirty =
+    dnsProvider !== (settings.dns_provider ?? "") ||
+    dnsZone !== (settings.dns_zone ?? "") ||
+    dnsApiKeyRef !== (settings.dns_api_key_ref ?? "");
+
   const defaultDomain = settings.server_ip ? `${settings.server_ip}.sslip.io` : "";
 
   async function handleCreateSecret() {
     if (!createName || !createKey) return;
     setCreatePending(true);
     try {
-      const res = await fetch('/api/v1/settings/dns-secret', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName, data: { api_key: createKey } }),
+      const data = await api.post<{ ref: string }>('/api/v1/settings/dns-secret', {
+        name: createName,
+        data: { api_key: createKey },
       });
-      if (!res.ok) throw new Error('failed to create secret');
-      const body = await res.json();
-      const ref = body.ref;
+
+      const ref = data.ref;
       setDnsApiKeyRef(ref);
       // Persist the ref to settings
       saveDNS.mutate({ key: 'dns_api_key_ref', value: ref });
@@ -496,7 +501,7 @@ function GeneralTab() {
       </Card>
 
       {/* Load Balancer */}
-      <LoadBalancerCard settings={settings} saveSetting={useUpdateSetting()} />
+      <LoadBalancerCard settings={settings} saveSetting={saveLBSetting} />
 
       {/* Wildcard Domain */}
       <Card>
@@ -618,37 +623,64 @@ function GeneralTab() {
             <div className="grid grid-cols-3 gap-4 items-center">
               <div className="col-span-1 text-muted-foreground">Provider</div>
               <div className="col-span-2">
-                <Select value={dnsProvider} onValueChange={setDnsProvider}>
+                <Select value={dnsProvider || "none"} onValueChange={setDnsProvider}>
                   <SelectTrigger className="w-64">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">(none)</SelectItem>
-                    <SelectItem value="coredns">coredns</SelectItem>
-                    <SelectItem value="cloudflare">cloudflare</SelectItem>
-                    <SelectItem value="route53">route53</SelectItem>
-                    <SelectItem value="digitalocean">digitalocean</SelectItem>
-                    <SelectItem value="pihole">pihole</SelectItem>
-                    <SelectItem value="manual">manual</SelectItem>
+                    <SelectItem value="coredns">CoreDNS (Internal)</SelectItem>
+                    <SelectItem value="cloudflare">Cloudflare</SelectItem>
+                    <SelectItem value="route53">AWS Route53</SelectItem>
+                    <SelectItem value="digitalocean">DigitalOcean</SelectItem>
+                    <SelectItem value="pihole">Pi-hole</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="col-span-1 text-muted-foreground">Zone</div>
               <div className="col-span-2">
-                <Input value={dnsZone} onChange={(e) => setDnsZone(e.target.value)} className="w-64 font-mono" />
+                <Input
+                  value={dnsZone}
+                  onChange={(e) => setDnsZone(e.target.value)}
+                  className="w-64 font-mono"
+                  placeholder="example.com"
+                />
               </div>
 
               <div className="col-span-1 text-muted-foreground">API Key Ref</div>
               <div className="col-span-2 flex items-center gap-2">
-                <Input value={dnsApiKeyRef} onChange={(e) => setDnsApiKeyRef(e.target.value)} className="w-64 font-mono" />
-                <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
-                  Create
-                </Button>
-                <Button size="sm" onClick={() => saveDNS.mutate({ key: "dns_provider", value: dnsProvider }) || saveDNS.mutate({ key: "dns_zone", value: dnsZone }) || saveDNS.mutate({ key: "dns_api_key_ref", value: dnsApiKeyRef })}>
-                  Save
+                <Input
+                  value={dnsApiKeyRef}
+                  onChange={(e) => setDnsApiKeyRef(e.target.value)}
+                  className="w-64 font-mono"
+                  placeholder="secret-name:key"
+                />
+                <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(true)}>
+                  Create Secret
                 </Button>
               </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                size="sm"
+                disabled={!dnsDirty || saveDNS.isPending}
+                onClick={() => {
+                  saveDNS.mutate({ key: "dns_provider", value: dnsProvider });
+                  saveDNS.mutate({ key: "dns_zone", value: dnsZone });
+                  saveDNS.mutate({ key: "dns_api_key_ref", value: dnsApiKeyRef });
+                  toast.success("DNS settings updated");
+                }}
+              >
+                {saveDNS.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1 h-3.5 w-3.5" />
+                )}
+                Save DNS Settings
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -679,7 +711,10 @@ function GeneralTab() {
   );
 }
 
-function LoadBalancerCard({ settings, saveSetting }: { settings: any; saveSetting: ReturnType<typeof useUpdateSetting> }) {
+function LoadBalancerCard({ 
+  settings, 
+  saveSetting 
+}: { settings: Record<string, string>; saveSetting: ReturnType<typeof useUpdateSetting> }) {
   const { status, loading } = useLBStatus();
   const [lbType, setLbType] = useState(settings?.lb_type ?? "nodeport");
   const [lbPool, setLbPool] = useState(settings?.lb_ip_pool ?? "");
@@ -688,6 +723,8 @@ function LoadBalancerCard({ settings, saveSetting }: { settings: any; saveSettin
     setLbType(settings?.lb_type ?? "nodeport");
     setLbPool(settings?.lb_ip_pool ?? "");
   }, [settings]);
+
+  const isDirty = lbType !== (settings?.lb_type ?? "nodeport") || lbPool !== (settings?.lb_ip_pool ?? "");
 
   function handleSave() {
     saveSetting.mutate({ key: "lb_type", value: lbType });
@@ -704,23 +741,29 @@ function LoadBalancerCard({ settings, saveSetting }: { settings: any; saveSettin
       </CardHeader>
       <CardContent>
         <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Type</span>
-            <Select value={lbType} onValueChange={setLbType}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nodeport">nodeport</SelectItem>
-                <SelectItem value="metallb">metallb</SelectItem>
-                <SelectItem value="cilium-bgp">cilium-bgp</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid grid-cols-3 gap-4 items-center">
+            <div className="col-span-1 text-muted-foreground">Type</div>
+            <div className="col-span-2">
+              <Select value={lbType} onValueChange={setLbType}>
+                <SelectTrigger className="w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nodeport">NodePort (Default)</SelectItem>
+                  <SelectItem value="metallb">MetalLB (Layer 2)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">IP Pool</span>
-            <Input value={lbPool} onChange={(e) => setLbPool(e.target.value)} className="w-64 font-mono" placeholder="e.g. 198.51.100.0/24 or 198.51.100.5-198.51.100.20" />
+            <div className="col-span-1 text-muted-foreground">IP Pool</div>
+            <div className="col-span-2">
+              <Input
+                value={lbPool}
+                onChange={(e) => setLbPool(e.target.value)}
+                className="w-64 font-mono"
+                placeholder="e.g. 192.168.1.200/28"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -756,9 +799,14 @@ function LoadBalancerCard({ settings, saveSetting }: { settings: any; saveSettin
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button onClick={handleSave} size="sm">
-              <Save className="h-3.5 w-3.5" /> Save
+          <div className="flex justify-end pt-2">
+            <Button onClick={handleSave} size="sm" disabled={!isDirty || saveSetting.isPending}>
+              {saveSetting.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="mr-1 h-3.5 w-3.5" />
+              )}
+              Save Load Balancer
             </Button>
           </div>
         </div>
@@ -1010,50 +1058,6 @@ function BackupTab() {
             provider is <strong>coredns</strong> (no external API). In production choose a
             supported provider and supply a secure API key reference.
           </p>
-          <div className="mt-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Provider</span>
-              <Select value={dnsProvider} onValueChange={(v) => setDnsProvider(v)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">manual (no automatic DNS)</SelectItem>
-                  <SelectItem value="coredns">coredns (local)</SelectItem>
-                  <SelectItem value="cloudflare">cloudflare</SelectItem>
-                  <SelectItem value="route53">route53</SelectItem>
-                  <SelectItem value="digitalocean">digitalocean</SelectItem>
-                  <SelectItem value="pihole">pihole</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">DNS Zone</span>
-              <Input value={dnsZone} onChange={(e) => setDnsZone(e.target.value)} className="w-64 font-mono" placeholder="example.com" />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">API Key Reference</Label>
-              <Input value={dnsApiKeyRef} onChange={(e) => setDnsApiKeyRef(e.target.value)} placeholder="secret-name:key (recommended)" className="max-w-md" />
-              <p className="text-xs text-muted-foreground">Store the real API key in External Secrets / Vault and set a reference here (not plain text).</p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => {
-                  saveDNS.mutate({ key: "dns_provider", value: dnsProvider });
-                  saveDNS.mutate({ key: "dns_zone", value: dnsZone });
-                  saveDNS.mutate({ key: "dns_api_key_ref", value: dnsApiKeyRef });
-                  toast.success("DNS settings saved");
-                }}
-                size="sm"
-                disabled={saveDNS.isPending}
-              >
-                <Save className="h-3.5 w-3.5" /> {saveDNS.isPending ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

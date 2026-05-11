@@ -1,59 +1,14 @@
 sudo /usr/local/bin/k3s-uninstall.sh
 
-# Instalar K3s
-curl -sfL https://get.k3s.io | sh -s - \
-  --flannel-backend=none \
-  --disable-kube-proxy \
-  --disable servicelb \
-  --disable-network-policy \
-  --disable traefik \
-  --cluster-init
-
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16 --disable-network-policy --disable=traefik" sh -
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 sudo chmod 644 $KUBECONFIG
 
-# Instalar cilium cli
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-CLI_ARCH=amd64
-curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz
-sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
-rm cilium-linux-${CLI_ARCH}.tar.gz
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
+watch kubectl get pods --all-namespaces
 
-# Crear namespaces de infraestructura
-kubectl create ns gateway-system
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml
 
-# Instalar cilium
-cilium install \
-  --version 1.16.5 \
-  --set l2announcements.enabled=true \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost=127.0.0.1 \
-  --set k8sServicePort=6443 \
-  --set gatewayAPI.enabled=true
-  <!-- --set envoy.enabled=true \ -->
+helm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.7.2 -n envoy-gateway-system --create-namespace
 
-o
-
-helm install cilium oci://quay.io/cilium/charts/cilium   --version 1.19.3   --namespace kube-system   --set ipam.mode=kubernetes   --set kubeProxyReplacement=true   --set l2announcements.enabled=true   --set externalIPs.enabled=true   --set hubble.relay.enabled=true   --set hubble.ui.enabled=true
-
-cilium status --wait
-
-# Comprobar el estado de los pods
-kubectl get pods -A
-
-# Aplicar L2 annoucement
-# Las políticas de Cilium L2 Announcement y el pool de IPs se configuran automáticamente
-# por el instalador o el backend de Vipas.
-
-# Verificaciones
-kubectl get ciliuml2announcementpolicies.cilium.io -n kube-system
-kubectl describe ciliuml2announcementpolicies.cilium.io l2-vipas-policy -n kube-system
-kubectl logs -n kube-system -l k8s-app=cilium --tail=100 | grep -i "l2announcement" | grep "test-vipas-service"
-
-# Instalar envoy gateway
-kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.2.0" | kubectl apply -f -
-
-# Verificar
-kubectl get crd | grep gateway.networking.k8s.io
-
-https://surajremanan.com/posts/migrating-ingress-nginx-to-gateway-api/
+kubectl create secret generic cloudflare-api-key --from-literal=apiKey=YOUR_API_TOKEN

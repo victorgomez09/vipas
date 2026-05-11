@@ -10,6 +10,7 @@ import (
 
 	"github.com/victorgomez09/vipas/apps/api/internal/config"
 	"github.com/victorgomez09/vipas/apps/api/internal/orchestrator"
+	"github.com/victorgomez09/vipas/apps/api/internal/store"
 )
 
 // Orchestrator implements orchestrator.Orchestrator with real K3s/K8s API calls.
@@ -17,13 +18,14 @@ type Orchestrator struct {
 	client kubernetes.Interface
 	config *rest.Config
 	logger *slog.Logger
+	store  store.Store
 }
 
 // Compile-time check that Orchestrator implements the interface.
 var _ orchestrator.Orchestrator = (*Orchestrator)(nil)
 
 // New creates a K3s orchestrator connected to a real cluster.
-func New(cfg config.K8sConfig, logger *slog.Logger) (*Orchestrator, error) {
+func New(cfg config.K8sConfig, s store.Store, logger *slog.Logger) (*Orchestrator, error) {
 	var restCfg *rest.Config
 	var err error
 
@@ -58,5 +60,6 @@ func New(cfg config.K8sConfig, logger *slog.Logger) (*Orchestrator, error) {
 		client: clientset,
 		config: restCfg,
 		logger: logger,
+		store:  s,
 	}, nil
 }

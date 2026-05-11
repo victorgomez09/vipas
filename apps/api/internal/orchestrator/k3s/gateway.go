@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/victorgomez09/vipas/apps/api/internal/model"
 	"github.com/victorgomez09/vipas/apps/api/internal/orchestrator"
 )
 
@@ -131,6 +132,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 					Name:      svcName,
 					Namespace: svcNS,
 					Labels: map[string]string{
+						"vipas-service-type":           "external-proxy", // Añadir esta etiqueta para que MetalLB la reconozca
 						"app.kubernetes.io/managed-by": "vipas",
 					},
 				},
@@ -158,6 +160,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 		if svc.Labels == nil {
 			svc.Labels = make(map[string]string)
 		}
+		svc.Labels["vipas-service-type"] = "external-proxy" // Añadir esta etiqueta para que MetalLB la reconozca
 		svc.Labels["app.kubernetes.io/managed-by"] = "vipas"
 		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeCluster
@@ -167,6 +170,18 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 
 	if err := upsertService(); err != nil {
 		o.logger.Warn("failed to ensure envoy gateway Service labels", slog.Any("error", err))
+	}
+
+	// Después de asegurar el servicio del Gateway, intentamos obtener su IP externa
+	// y actualizar la configuración global. Esta IP puede no estar disponible
+	// inmediatamente, por lo que un proceso de sondeo en segundo plano sería ideal.
+	if gatewayIP, err := o.GetGatewayIP(ctx); err == nil && gatewayIP != "" {
+		o.logger.Info("Detected Gateway IP after ensuring service", slog.String("ip", gatewayIP))
+		if o.store != nil {
+			if err := o.store.Settings().Set(ctx, model.SettingGatewayIP, gatewayIP); err != nil {
+				o.logger.Warn("failed to persist gateway ip to database", slog.Any("error", err))
+			}
+		}
 	}
 
 	return nil

@@ -240,14 +240,17 @@ export function GeneralTab({
       <Card>
         <CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Internal URL</p>
-          {(app.ports && app.ports.length > 0
-            ? app.ports
-            : [{ service_port: 80, protocol: "tcp" }]
-          ).map((p, i) => (
-            <p key={i} className="mt-1 font-mono text-sm">
-              http://{app.k8s_name || app.name}:{p.service_port}
+          {app.ports && app.ports.length > 0 ? (
+            app.ports.map((p, i) => (
+              <p key={i} className="mt-1 font-mono text-sm">
+                http://{app.k8s_name || app.name}:{p.service_port}
+              </p>
+            ))
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground italic">
+              No internal ports configured (Worker/Tool mode)
             </p>
-          ))}
+          )}
           <p className="mt-1 text-xs text-muted-foreground">
             Accessible from any service in the {app.namespace || "default"} namespace
           </p>

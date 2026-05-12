@@ -13,7 +13,7 @@
                 <mxCell id="lb_group" value="Load Balancer Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
                     <mxGeometry x="420" y="270" width="720" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="lb1" value="MetalLB / Cilium BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
+                <mxCell id="lb1" value="MetalLB / Calico BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
                     <mxGeometry x="60" y="40" width="200" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="lb_note" value=":80 / :443 → Gateway Nodes" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="lb_group">
@@ -31,7 +31,7 @@
                 <mxCell id="envoy1" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node1">
                     <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium1" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
+                <mxCell id="cilium1" value="Calico Node&#xa;(CNI + NetworkPolicy)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
                     <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="nlb1" value="hostNetwork: true&#xa;:80 / :443" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="gw_node1">
@@ -43,7 +43,7 @@
                 <mxCell id="envoy2" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node2">
                     <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium2" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
+                <mxCell id="cilium2" value="Calico Node&#xa;(CNI + NetworkPolicy)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
                     <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="gw_nodeN" value="Gateway Node N (escalable)" style="swimlane;startSize=25;fillColor=#f9dbc8;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="gw_group">
@@ -130,13 +130,13 @@
                 <mxCell id="db2" value="Redis Sentinel" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="ns_db">
                     <mxGeometry x="10" y="85" width="165" height="35" as="geometry"/>
                 </mxCell>
-                <mxCell id="storage" value="Longhorn / Rook-Ceph&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="storage" value="Longhorn&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="210" y="1000" width="200" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="obs" value="Observabilidad&#xa;Prometheus + Grafana&#xa;Alertmanager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="440" y="1000" width="200" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium_np" value="CiliumNetworkPolicy&#xa;L3/L4/L7 + FQDN-aware&#xa;(DaemonSet en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="cilium_np" value="Calico NetworkPolicy&#xa;L3/L4 para aislamiento entre namespaces&#xa;(CNI en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="670" y="1000" width="210" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="3">
@@ -198,7 +198,7 @@
                 <mxCell id="lb_group" value="Load Balancer Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
                     <mxGeometry x="420" y="270" width="720" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="lb1" value="MetalLB / Cilium BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
+                <mxCell id="lb1" value="MetalLB / Calico BGP&#xa;VIP: 10.0.0.10&#xa;(Active/Active)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="lb_group">
                     <mxGeometry x="60" y="40" width="200" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="lb_note" value=":80 / :443 → Gateway Nodes" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="lb_group">
@@ -220,7 +220,7 @@
                 <mxCell id="envoy1" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node1">
                     <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium1" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
+                <mxCell id="cilium1" value="Calico Node&#xa;(CNI + NetworkPolicy)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node1">
                     <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="nlb1" value="hostNetwork: true&#xa;:80 / :443" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="gw_node1">
@@ -233,7 +233,7 @@
                 <mxCell id="envoy2" value="Envoy Proxy Pod&#xa;(envoy-gateway)" style="shape=mxgraph.kubernetes.pod;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="gw_node2">
                     <mxGeometry x="20" y="40" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium2" value="Cilium Agent&#xa;(eBPF dataplane)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
+                <mxCell id="cilium2" value="Calico Node&#xa;(CNI + NetworkPolicy)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="gw_node2">
                     <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
                 </mxCell>
                 <!-- Envoy GW Node N -->
@@ -324,13 +324,13 @@
                 <!-- ═══════════════════════════════════════════════════════ -->
                 <!-- STORAGE + OBSERVABILIDAD -->
                 <!-- ═══════════════════════════════════════════════════════ -->
-                <mxCell id="storage" value="Longhorn / Rook-Ceph&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="storage" value="Longhorn&#xa;Storage distribuido&#xa;(PVC replicadas x3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="210" y="1000" width="200" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="obs" value="Observabilidad&#xa;Prometheus + Grafana&#xa;Alertmanager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="440" y="1000" width="200" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="cilium_np" value="CiliumNetworkPolicy&#xa;L3/L4/L7 + FQDN-aware&#xa;(DaemonSet en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="cilium_np" value="Calico NetworkPolicy&#xa;L3/L4 para aislamiento entre namespaces&#xa;(CNI en todos los nodos)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="670" y="1000" width="210" height="70" as="geometry"/>
                 </mxCell>
                 <!-- ═══════════════════════════════════════════════════════ -->
@@ -430,7 +430,7 @@
                     <mxGeometry x="310" y="50" width="230" height="100" as="geometry"/>
                 </mxCell>
                 <!-- Kubernetes zone -->
-                <mxCell id="k8s" value="Kubernetes (k3s)  —  CNI: Cilium" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="wsl">
+                <mxCell id="k8s" value="Kubernetes (k3s)  —  CNI: Calico" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="wsl">
                     <mxGeometry x="30" y="195" width="1080" height="540" as="geometry"/>
                 </mxCell>
                 <!-- MetalLB -->

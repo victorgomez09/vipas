@@ -18,7 +18,7 @@ curl -sSL https://get.vipas.dev/upgrade | sudo sh
 
 #### Applications
 - Git push to deploy (GitHub App) or Docker image
-- In-cluster builds via **Kaniko** — no Docker socket needed
+- In-cluster builds for Dockerfile and Nixpacks workflows
 - Rolling deploys, one-click rollback, cancel in-flight builds
 - Custom domains with automatic TLS
 - Environment variables, secrets, persistent volumes
@@ -39,6 +39,9 @@ curl -sSL https://get.vipas.dev/upgrade | sudo sh
 #### Cluster
 - Node overview with topology visualization
 - Helm releases and DaemonSets
+- Calico as CNI (networking + NetworkPolicy)
+- ExternalDNS for automatic DNS records
+- Longhorn for distributed persistent volumes
 - Traefik ingress configuration editor
 - Alert rules — CPU, memory, disk, node, pod events
 - Auto-cleanup of evicted and failed pods
@@ -64,7 +67,7 @@ curl -sSL https://get.vipas.dev/upgrade | sudo sh
 |  | Vipas | Coolify | Dokploy |
 |---|:---:|:---:|:---:|
 | **Orchestrator** | Kubernetes (K3s) | Docker Compose | Docker Swarm |
-| **In-cluster builds** (no Docker socket) | Kaniko | — | — |
+| **In-cluster builds** | Dockerfile + Nixpacks | — | — |
 | **Rolling updates** | Native K8s | Custom | Custom |
 | **Autoscaling** (HPA) | Yes | — | — |
 | **Health probes** (liveness / readiness) | Yes | — | — |

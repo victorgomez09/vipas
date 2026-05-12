@@ -344,8 +344,8 @@ export function MonitoringTab({ app, appId }: { app: App; appId: string }) {
   const memPct = totalMemLimit > 0 ? (totalMemUsed / totalMemLimit) * 100 : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
+    <div className="flex flex-col gap-2">
+      <div className="grid gap-2 md:grid-cols-4">
         <StatCard
           icon={Activity}
           label="Status"
@@ -378,7 +378,7 @@ export function MonitoringTab({ app, appId }: { app: App; appId: string }) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-2 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-0">
             <div className="flex items-center justify-between">

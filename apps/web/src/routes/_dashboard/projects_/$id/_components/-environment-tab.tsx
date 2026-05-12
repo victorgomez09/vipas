@@ -322,7 +322,7 @@ export function EnvironmentTab({
   const isSaving = subTab === "runtime" ? updateEnv.isPending : updateApp.isPending;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-2">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
@@ -334,9 +334,9 @@ export function EnvironmentTab({
                   key={t}
                   type="button"
                   onClick={() => setSubTab(t)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                     subTab === t
-                      ? "bg-background text-foreground"
+                      ? "bg-primary/10 text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -363,9 +363,9 @@ export function EnvironmentTab({
                   key={m}
                   type="button"
                   onClick={() => switchMode(m)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                     mode === m
-                      ? "bg-background text-foreground"
+                      ? "bg-primary/10 text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >

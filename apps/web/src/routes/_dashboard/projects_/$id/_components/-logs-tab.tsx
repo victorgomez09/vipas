@@ -295,9 +295,9 @@ export function LogsTab({
                 key={t}
                 type="button"
                 onClick={() => setSubTab(t)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
                   subTab === t
-                    ? "bg-background text-foreground"
+                    ? "bg-primary/10 text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >

@@ -161,7 +161,7 @@ function AppDetailPage() {
         </TabsList>
 
         <div className="flex-1">
-          <TabsContent value="general" className="space-y-4 mt-0 w-full">
+          <TabsContent value="general" className="mt-0 w-full">
             <GeneralTab app={app} appStatus={appStatus} pods={safePods} />
           </TabsContent>
 

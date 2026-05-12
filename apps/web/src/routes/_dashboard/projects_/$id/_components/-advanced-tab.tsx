@@ -496,7 +496,7 @@ function ResourcesCard({ app, appId }: { app: App; appId: string }) {
       onSave={handleSave}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-3 rounded-lg border p-3">
+        <div className="space-y-3 rounded-lg p-3 bg-background">
           <p className="text-xs font-medium text-muted-foreground">Request (guaranteed)</p>
           <ResourceSelect label="CPU" value={cpuReq} onChange={setCpuReq} options={CPU_OPTIONS} />
           <ResourceSelect
@@ -506,7 +506,7 @@ function ResourcesCard({ app, appId }: { app: App; appId: string }) {
             options={MEMORY_OPTIONS}
           />
         </div>
-        <div className="space-y-3 rounded-lg border p-3">
+        <div className="space-y-3 rounded-lg p-3 bg-background">
           <p className="text-xs font-medium text-muted-foreground">Limit (maximum)</p>
           <ResourceSelect label="CPU" value={cpuLim} onChange={setCpuLim} options={CPU_OPTIONS} />
           <ResourceSelect
@@ -561,7 +561,7 @@ function PortsCard({ app, appId }: { app: App; appId: string }) {
     >
       <div className="space-y-3">
         {ports.map((p, i) => (
-          <div key={`${p.container_port}-${p.service_port}-${i}`} className="flex items-end gap-3">
+          <div key={i} className="flex items-end gap-3">
             <div className="space-y-1.5">
               {i === 0 && <Label className="text-xs">Container Port</Label>}
               <Input
@@ -653,12 +653,12 @@ function SourceProviderCard({ app, appId }: { app: App; appId: string }) {
       {/* Source type indicator */}
       <div className="mb-4 inline-flex rounded-lg border bg-muted p-0.5">
         <span
-          className={`rounded-md px-3 py-1 text-xs font-medium ${!isGit ? "bg-background text-foreground" : "text-muted-foreground"}`}
+          className={`rounded-md px-3 py-1 text-xs font-medium ${!isGit ? "bg-primary/10 text-foreground" : "text-muted-foreground"}`}
         >
           Docker Image
         </span>
         <span
-          className={`rounded-md px-3 py-1 text-xs font-medium ${isGit ? "bg-background text-foreground" : "text-muted-foreground"}`}
+          className={`rounded-md px-3 py-1 text-xs font-medium ${isGit ? "bg-primary/10 text-foreground" : "text-muted-foreground"}`}
         >
           Git Repository
         </span>
@@ -791,8 +791,8 @@ function BuildConfigCard({ app, appId }: { app: App; appId: string }) {
                 key={opt.value}
                 type="button"
                 onClick={() => setBuildType(opt.value)}
-                className={`rounded-lg border p-3 text-left transition-colors ${
-                  buildType === opt.value ? "border-primary bg-primary/5" : "hover:bg-accent"
+                className={`rounded-lg p-3 text-left transition-colors cursor-pointer bg-background ${
+                  buildType === opt.value ? "bg-primary/10" : "hover:bg-accent"
                 }`}
               >
                 <p
@@ -1166,7 +1166,7 @@ export function SettingsTab({
   onDelete: () => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-2">
       {/* Source & Build — top of settings */}
       <SourceProviderCard app={app} appId={appId} />
       {app.source_type === "git" && <BuildConfigCard app={app} appId={appId} />}

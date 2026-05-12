@@ -353,7 +353,7 @@ export function DeploymentsTab({
   deployStrategy: string;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-2">
       {/* Webhook configuration (only for git-based apps) */}
       <WebhookSection app={app} appId={appId} />
 

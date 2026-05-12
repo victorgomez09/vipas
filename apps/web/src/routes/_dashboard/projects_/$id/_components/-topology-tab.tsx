@@ -18,8 +18,8 @@ function FlowNode({
 }) {
   return (
     <div
-      className={`rounded-lg border bg-card p-4 transition-all ${
-        highlight ? "border-primary/40" : ""
+      className={`rounded-lg bg-card p-4 transition-all ${
+        highlight ? "border border-primary/40" : ""
       }`}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -62,7 +62,7 @@ export function TopologyTab({
   const ports = app.ports ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-2">
       {/* Horizontal flow — large screens */}
       <div className="hidden items-stretch gap-1 lg:flex">
         {/* App */}
@@ -216,17 +216,17 @@ export function TopologyTab({
 
       {/* Resource summary */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border p-3">
+        <div className="rounded-lg p-3 bg-card">
           <p className="text-xs font-medium text-muted-foreground">Namespace</p>
           <p className="mt-0.5 font-mono text-sm">{app.namespace || "default"}</p>
         </div>
-        <div className="rounded-lg border p-3">
+        <div className="rounded-lg p-3 bg-card">
           <p className="text-xs font-medium text-muted-foreground">Replicas</p>
           <p className="mt-0.5 font-mono text-sm">
             {readyReplicas} / {desiredReplicas}
           </p>
         </div>
-        <div className="rounded-lg border p-3">
+        <div className="rounded-lg p-3 bg-card">
           <p className="text-xs font-medium text-muted-foreground">Strategy</p>
           <p className="mt-0.5 font-mono text-sm">{app.deploy_strategy || "rolling"}</p>
         </div>

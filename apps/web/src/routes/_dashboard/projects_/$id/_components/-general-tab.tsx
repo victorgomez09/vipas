@@ -220,9 +220,9 @@ export function GeneralTab({
   const hc = app.health_check;
 
   return (
-    <>
+    <div className="flex flex-col gap-2">
       {/* Stat cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-4">
         <StatCardCompact label="Status" value={appStatus?.phase || app.status} />
         <StatCardCompact
           label="Replicas"
@@ -247,7 +247,7 @@ export function GeneralTab({
               </p>
             ))
           ) : (
-            <p className="mt-1 text-sm text-muted-foreground italic">
+            <p className="mt-3 text-sm">
               No internal ports configured (Worker/Tool mode)
             </p>
           )}
@@ -299,6 +299,6 @@ export function GeneralTab({
           )}
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

@@ -125,7 +125,7 @@ export function AppSearch() {
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-popover shadow-2xl">
+      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-popover">
         <div className="flex items-center gap-3 border-b px-4 py-3">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground/50" />
           <input

@@ -89,6 +89,7 @@ function ProjectDetailPage() {
     docker_image: "",
     git_repo: "",
     git_branch: "main",
+    build_type: "dockerfile",
   });
   const [dbForm, setDbForm] = useState({
     name: "",
@@ -142,6 +143,7 @@ function ProjectDetailPage() {
         docker_image: "",
         git_repo: "",
         git_branch: "main",
+        build_type: "dockerfile",
       });
     } else {
       await createDatabase.mutateAsync(dbForm);
@@ -161,98 +163,101 @@ function ProjectDetailPage() {
 
   return (
     <div>
-      <PageHeader
-        title={project.name}
-        description={project.description || undefined}
-        badges={
-          project.namespace ? (
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-              {project.namespace}
-            </code>
-          ) : undefined
-        }
-        backTo="/projects"
-      />
+      <div className="flex justify-between items-center">
+        <PageHeader
+          title={project.name}
+          description={project.description || undefined}
+          badges={
+            project.namespace ? (
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                {project.namespace}
+              </code>
+            ) : undefined
+          }
+          backTo="/projects"
+        />
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" /> New Service
+        </Button>
+      </div>
+
       <Separator className="my-5" />
 
-      <Tabs defaultValue="services">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="environment">Environment</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> New Service
-          </Button>
-        </div>
+      <Tabs defaultValue="services" orientation="vertical" className="flex flex-wrap gap-4 h-full">
+        <TabsList className="flex-col w-[10em] h-full">
+          <TabsTrigger value="services">Services</TabsTrigger>
+          <TabsTrigger value="environment">Environment</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
 
-        {/* ── Services tab ── */}
-        <TabsContent value="services" className="mt-4">
-          {services.length === 0 ? (
-            <EmptyState
-              icon={Container}
-              message="No services yet."
-              actionLabel="New Service"
-              onAction={() => setShowCreate(true)}
+        <div className="flex-1">
+          {/* ── Services tab ── */}
+          <TabsContent value="services" className="mt-0">
+            {services.length === 0 ? (
+              <EmptyState
+                icon={Container}
+                message="No services yet."
+                actionLabel="New Service"
+                onAction={() => setShowCreate(true)}
+              />
+            ) : (
+              <ServiceList services={services} projectId={projectId} onDelete={setDeleteTarget} />
+            )}
+          </TabsContent>
+
+          {/* ── Environment tab ── */}
+          <TabsContent value="environment" className="mt-0">
+            <ProjectEnvEditor
+              key={JSON.stringify(project.env_vars)}
+              projectId={projectId}
+              envVars={project.env_vars}
             />
-          ) : (
-            <ServiceList services={services} projectId={projectId} onDelete={setDeleteTarget} />
-          )}
-        </TabsContent>
+          </TabsContent>
 
-        {/* ── Environment tab ── */}
-        <TabsContent value="environment" className="mt-4">
-          <ProjectEnvEditor
-            key={JSON.stringify(project.env_vars)}
-            projectId={projectId}
-            envVars={project.env_vars}
-          />
-        </TabsContent>
-
-        {/* ── Settings tab ── */}
-        <TabsContent value="settings" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                <Settings2 className="h-4 w-4" /> General
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Project Name</Label>
-                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-              </div>
-              <Button
-                onClick={() => updateProject.mutate({ name: editName, description: editDesc })}
-                disabled={updateProject.isPending}
-              >
-                {updateProject.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Service Account</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="font-mono text-sm">
-                {project.service_account || (
-                  <span className="text-muted-foreground">Auto-created on deploy</span>
-                )}
-              </p>
-            </CardContent>
-          </Card>
-          <DangerZone
-            description="Permanently delete this project and all services."
-            buttonLabel="Delete Project"
-            onDelete={() => setShowDeleteProject(true)}
-          />
-        </TabsContent>
+          {/* ── Settings tab ── */}
+          <TabsContent value="settings" className="space-y-4 mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Settings2 className="h-4 w-4" /> General
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Project Name</Label>
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+                </div>
+                <Button
+                  onClick={() => updateProject.mutate({ name: editName, description: editDesc })}
+                  disabled={updateProject.isPending}
+                >
+                  {updateProject.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Service Account</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-sm">
+                  {project.service_account || (
+                    <span className="text-muted-foreground">Auto-created on deploy</span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+            <DangerZone
+              description="Permanently delete this project and all services."
+              buttonLabel="Delete Project"
+              onDelete={() => setShowDeleteProject(true)}
+            />
+          </TabsContent>
+        </div>
       </Tabs>
 
       {/* ── Create Service Dialog ── */}
@@ -512,7 +517,6 @@ function ProjectEnvEditor({
 }
 
 // ── Create Service Dialog ─────────────────────────────────────────
-
 function CreateServiceDialog({
   open,
   onOpenChange,
@@ -535,6 +539,7 @@ function CreateServiceDialog({
     docker_image: string;
     git_repo: string;
     git_branch: string;
+    build_type: string;
   };
   onAppFormChange: (v: typeof appForm) => void;
   dbForm: { name: string; engine: string; version: string; storage_size: string };
@@ -561,9 +566,8 @@ function CreateServiceDialog({
                 key={type}
                 type="button"
                 onClick={() => onServiceTypeChange(type)}
-                className={`flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-colors ${
-                  active ? "border-primary bg-primary/5" : "hover:bg-accent"
-                }`}
+                className={`flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-colors ${active ? "border-primary bg-primary/5" : "hover:bg-accent"
+                  }`}
               >
                 <Icon className={`h-6 w-6 ${active ? "text-primary" : "text-muted-foreground"}`} />
                 <span className="font-medium">{label}</span>
@@ -598,7 +602,7 @@ function ImageSourceFields({
   onChange,
   registries,
 }: {
-  form: { docker_image: string; [key: string]: string };
+  form: { docker_image: string;[key: string]: string };
   onChange: (v: typeof form) => void;
   registries: SharedResource[];
 }) {
@@ -667,7 +671,7 @@ function GitSourceFields({
   onChange,
   gitProviders,
 }: {
-  form: { git_repo: string; git_branch: string; [key: string]: string };
+  form: { git_repo: string; git_branch: string;[key: string]: string };
   onChange: (v: typeof form) => void;
   gitProviders: { id: string; name: string; provider: string }[];
 }) {
@@ -796,7 +800,10 @@ function GitSourceFields({
           </div>
           <div className="space-y-2">
             <Label>Build Type</Label>
-            <Select value="dockerfile" onValueChange={() => {}}>
+            <Select
+              value={form.build_type || "dockerfile"}
+              onValueChange={(v) => update("build_type", v)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -822,6 +829,7 @@ function AppFormFields({
     docker_image: string;
     git_repo: string;
     git_branch: string;
+    build_type: string;
   };
   onChange: (v: typeof form) => void;
 }) {

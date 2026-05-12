@@ -270,7 +270,7 @@ function UpgradeButton({
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop */}
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-lg rounded-xl border bg-popover shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-xl border bg-popover">
             {/* Header */}
             <div className="border-b px-6 py-5">
               <div className="flex items-center gap-3">
@@ -480,7 +480,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r bg-card/50 transition-[width] duration-200 ease-in-out",
+        "flex h-screen flex-col bg-card transition-[width] duration-200 ease-in-out",
         collapsed ? "w-[56px]" : "w-[240px]",
       )}
     >
@@ -711,7 +711,7 @@ export function Sidebar() {
             <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
             <div
               className={cn(
-                "absolute bottom-full z-50 mb-1 overflow-hidden rounded-lg border bg-popover shadow-lg",
+                "absolute bottom-full z-50 mb-1 overflow-hidden rounded-lg border bg-popover",
                 collapsed ? "left-0 w-48" : "left-2 right-2",
               )}
             >

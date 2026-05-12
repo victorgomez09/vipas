@@ -199,16 +199,16 @@ function ClusterPage() {
   // Compute CPU/Memory percentages from nodeMetrics
   const cpuPct = nodeMetrics?.length
     ? pctString(
-        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_used), 0)}m`,
-        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_total), 0)}m`,
-      )
+      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_used), 0)}m`,
+      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_total), 0)}m`,
+    )
     : "N/A";
 
   const memPct = nodeMetrics?.length
     ? pctString(
-        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_used), 0)}Mi`,
-        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_total), 0)}Mi`,
-      )
+      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_used), 0)}Mi`,
+      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_total), 0)}Mi`,
+    )
     : "N/A";
 
   return (
@@ -234,8 +234,8 @@ function ClusterPage() {
       <NodeTrendCharts />
 
       {/* Tabs */}
-      <Tabs defaultValue="nodes" className="mt-6">
-        <TabsList>
+      <Tabs defaultValue="nodes" orientation="vertical" className="flex gap-4 mt-6">
+        <TabsList className="flex-col w-[10em] h-full">
           <TabsTrigger value="topology">Topology</TabsTrigger>
           <TabsTrigger value="nodes">Nodes</TabsTrigger>
           <TabsTrigger value="pods">Pods</TabsTrigger>
@@ -255,56 +255,67 @@ function ClusterPage() {
           <TabsTrigger value="health">Health</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="topology">
-          {topoError ? (
-            <ErrorBanner message="Failed to load cluster topology" />
-          ) : (
-            topology && <ClusterTopologyView data={topology} />
-          )}
-        </TabsContent>
-        <TabsContent value="nodes">
-          {nodesError ? (
-            <ErrorBanner message="Failed to load nodes" />
-          ) : (
-            <NodesTab nodes={nodes ?? []} nodeMetrics={nodeMetrics ?? []} etcdQuorum={etcdQuorum} />
-          )}
-        </TabsContent>
-        <TabsContent value="pods">
-          {podsError ? (
-            <ErrorBanner message="Failed to load pods" />
-          ) : (
-            <PodsTab pods={pods ?? []} namespaces={namespaces ?? []} />
-          )}
-        </TabsContent>
-        <TabsContent value="events">
-          <EventsTab />
-        </TabsContent>
-        <TabsContent value="alerts">
-          <AlertsTab />
-        </TabsContent>
-        <TabsContent value="storage">
-          {pvcsError ? (
-            <ErrorBanner message="Failed to load volumes" />
-          ) : (
-            <StorageTab pvcs={pvcs ?? []} />
-          )}
-        </TabsContent>
-        <TabsContent value="namespaces">
-          {nsError ? (
-            <ErrorBanner message="Failed to load namespaces" />
-          ) : (
-            <NamespacesTab namespaces={namespaces ?? []} />
-          )}
-        </TabsContent>
-        <TabsContent value="helm">
-          <HelmTab />
-        </TabsContent>
-        <TabsContent value="daemonsets">
-          <DaemonSetsTab />
-        </TabsContent>
-        <TabsContent value="health">
-          <ClusterHealthTab />
-        </TabsContent>
+        <div className="flex-1">
+          <TabsContent value="topology" className="mt-0">
+            {topoError ? (
+              <ErrorBanner message="Failed to load cluster topology" />
+            ) : (
+              topology && <ClusterTopologyView data={topology} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="nodes" className="mt-0">
+            {nodesError ? (
+              <ErrorBanner message="Failed to load nodes" />
+            ) : (
+              <NodesTab nodes={nodes ?? []} nodeMetrics={nodeMetrics ?? []} etcdQuorum={etcdQuorum} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="pods" className="mt-0">
+            {podsError ? (
+              <ErrorBanner message="Failed to load pods" />
+            ) : (
+              <PodsTab pods={pods ?? []} namespaces={namespaces ?? []} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="events" className="mt-0">
+            <EventsTab />
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-0">
+            <AlertsTab />
+          </TabsContent>
+
+          <TabsContent value="storage" className="mt-0">
+            {pvcsError ? (
+              <ErrorBanner message="Failed to load volumes" />
+            ) : (
+              <StorageTab pvcs={pvcs ?? []} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="namespaces" className="mt-0">
+            {nsError ? (
+              <ErrorBanner message="Failed to load namespaces" />
+            ) : (
+              <NamespacesTab namespaces={namespaces ?? []} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="helm" className="mt-0">
+            <HelmTab />
+          </TabsContent>
+
+          <TabsContent value="daemonsets" className="mt-0">
+            <DaemonSetsTab />
+          </TabsContent>
+
+          <TabsContent value="health" className="mt-0">
+            <ClusterHealthTab />
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
@@ -643,7 +654,7 @@ function NodesTab({
   };
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         {etcdQuorum ? (
           <Badge variant={etcdQuorum.has_quorum ? "success" : "destructive"}>
@@ -1117,7 +1128,7 @@ function PodsTab({ pods, namespaces }: { pods: PodInfo[]; namespaces: NamespaceI
   }, [pods, nsFilter, statusFilter]);
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       <div className="flex gap-3">
         <Select value={nsFilter} onValueChange={setNsFilter}>
           <SelectTrigger className="w-[200px]">
@@ -1158,7 +1169,7 @@ function PodsTab({ pods, namespaces }: { pods: PodInfo[]; namespaces: NamespaceI
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-sm">
+                    <span className="truncate font-mono text-sm max-w-[20em]">
                       {pod.namespace}/{pod.name}
                     </span>
                     <Badge variant={statusVariant(pod.phase)}>{pod.phase}</Badge>
@@ -1201,7 +1212,7 @@ function EventsTab() {
   const totalPages = Math.ceil(total / 50);
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{total} events (last 30 days)</p>
         <div className="flex items-center gap-2">
@@ -1268,7 +1279,7 @@ function StorageTab({ pvcs }: { pvcs: PVCInfo[] }) {
     return <EmptyState icon={HardDrive} message="No persistent volume claims found" />;
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       {pvcs.map((pvc) => (
         <Card key={`${pvc.namespace}/${pvc.name}`}>
           <CardContent className="flex items-center gap-4 p-4">
@@ -1303,7 +1314,7 @@ function NamespacesTab({ namespaces }: { namespaces: NamespaceInfo[] }) {
     return <EmptyState icon={FolderOpen} message="No namespaces found" />;
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       {namespaces.map((ns) => (
         <Card key={ns.name}>
           <CardContent className="flex items-center gap-4 p-4">
@@ -1348,7 +1359,7 @@ function HelmTab() {
   }
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className=" space-y-3">
       {releases.map((release: HelmRelease) => (
         <Card key={`${release.namespace}/${release.name}`}>
           <CardContent className="flex items-center gap-4 p-4">
@@ -1387,7 +1398,7 @@ function DaemonSetsTab() {
   }
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       {daemonsets.map((ds: DaemonSetInfo) => (
         <Card key={`${ds.namespace}/${ds.name}`}>
           <CardContent className="flex items-center gap-4 p-4">
@@ -1424,7 +1435,7 @@ function AlertsTab() {
   if (isError) return <ErrorBanner message="Failed to load alerts" />;
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       {alerts.length === 0 ? (
         <EmptyState icon={Activity} message="No active alerts" />
       ) : (
@@ -1632,27 +1643,25 @@ function ClusterHealthTab() {
     stats.unbound_pvcs;
 
   return (
-    <div className="mt-3 space-y-4">
+    <div className="space-y-4">
       {/* Overview card */}
       <Card>
         <CardContent className="flex items-center gap-3 py-4">
           <div
-            className={`flex h-9 w-9 items-center justify-center rounded-full ${
-              totalIssues === 0
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${totalIssues === 0
                 ? "bg-green-500/10"
                 : totalIssues <= 5
                   ? "bg-amber-500/10"
                   : "bg-red-500/10"
-            }`}
+              }`}
           >
             <HeartPulse
-              className={`h-5 w-5 ${
-                totalIssues === 0
+              className={`h-5 w-5 ${totalIssues === 0
                   ? "text-green-500"
                   : totalIssues <= 5
                     ? "text-amber-500"
                     : "text-red-500"
-              }`}
+                }`}
             />
           </div>
           <div>

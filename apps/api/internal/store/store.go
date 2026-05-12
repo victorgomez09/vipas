@@ -105,6 +105,7 @@ type DeploymentStore interface {
 	ListByApp(ctx context.Context, appID uuid.UUID, params ListParams) ([]model.Deployment, int, error)
 	ListAll(ctx context.Context, params ListParams, filter DeploymentListFilter) ([]model.Deployment, int, error)
 	GetLatestByApp(ctx context.Context, appID uuid.UUID) (*model.Deployment, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type DomainStore interface {

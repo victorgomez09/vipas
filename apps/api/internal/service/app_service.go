@@ -670,9 +670,9 @@ func (s *AppService) Restart(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	// Only allow restart on running/partial apps
+	// Allow restart on stable, error, or stuck transitional states
 	switch app.Status {
-	case model.AppStatusRunning, model.AppStatusPartial, model.AppStatusError:
+	case model.AppStatusRunning, model.AppStatusPartial, model.AppStatusError, model.AppStatusDeploying, model.AppStatusBuilding:
 		// OK
 	default:
 		return fmt.Errorf("cannot restart app in %s state", app.Status)
@@ -694,9 +694,9 @@ func (s *AppService) Stop(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	// Only allow stop on running/partial/error apps
+	// Allow stop on stable, error, or stuck transitional states
 	switch app.Status {
-	case model.AppStatusRunning, model.AppStatusPartial, model.AppStatusError:
+	case model.AppStatusRunning, model.AppStatusPartial, model.AppStatusError, model.AppStatusDeploying, model.AppStatusBuilding:
 		// OK
 	default:
 		return fmt.Errorf("cannot stop app in %s state", app.Status)

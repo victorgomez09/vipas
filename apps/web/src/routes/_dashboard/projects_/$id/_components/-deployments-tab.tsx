@@ -14,6 +14,7 @@ import {
   Rocket,
   RotateCcw,
   Square,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -26,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   useCancelDeploy,
+  useDeleteDeploy,
   useDeploy,
   useDeploymentDetail,
   useDisableWebhook,
@@ -228,6 +230,7 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
   );
   const redeploy = useDeploy(appId);
   const cancelDeploy = useCancelDeploy(appId);
+  const deleteDeploy = useDeleteDeploy(appId);
   const isInProgress = ["queued", "building", "deploying"].includes(deployment.status);
 
   const hasDuration = deployment.started_at && deployment.finished_at;
@@ -286,18 +289,34 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
               <Square className="h-3.5 w-3.5" /> Cancel
             </Button>
           )}
-          {deployment.status === "success" && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={(e) => {
-                e.stopPropagation();
-                redeploy.mutate(undefined);
-              }}
-            >
-              Rollback
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
+          {!isInProgress && (
+            <div className="flex items-center gap-1">
+              {deployment.status === "success" && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    redeploy.mutate(undefined);
+                  }}
+                >
+                  Rollback
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteDeploy.mutate(deployment.id);
+                }}
+                disabled={deleteDeploy.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           )}
         </div>
 

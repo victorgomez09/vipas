@@ -336,7 +336,7 @@ export function EnvironmentTab({
                   onClick={() => setSubTab(t)}
                   className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
                     subTab === t
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "bg-background text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -365,7 +365,7 @@ export function EnvironmentTab({
                   onClick={() => switchMode(m)}
                   className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
                     mode === m
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "bg-background text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >

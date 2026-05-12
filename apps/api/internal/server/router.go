@@ -179,6 +179,7 @@ func NewRouter(deps *RouterDeps) *gin.Engine {
 			protected.GET("/deployments/queue", deploys.ListQueue)
 			protected.GET("/deployments/:id", deploys.Get)
 			protected.POST("/deployments/:id/cancel", deploys.Cancel)
+			protected.DELETE("/deployments/:id", deploys.Delete)
 			protected.POST("/deployments/:id/rollback", deploys.Rollback)
 
 			// CronJobs (flat)

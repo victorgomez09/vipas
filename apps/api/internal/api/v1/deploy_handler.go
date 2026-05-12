@@ -195,6 +195,23 @@ func (h *DeployHandler) Cancel(c *gin.Context) {
 	httputil.RespondOK(c, gin.H{"message": "deployment cancelled"})
 }
 
+func (h *DeployHandler) Delete(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httputil.RespondError(c, apierr.ErrBadRequest.WithDetail("invalid deployment ID"))
+		return
+	}
+	if _, err := h.verifyDeploymentOrg(c, id); err != nil {
+		httputil.RespondError(c, apierr.ErrForbidden.WithDetail("access denied"))
+		return
+	}
+	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
+		httputil.RespondError(c, err)
+		return
+	}
+	httputil.RespondOK(c, gin.H{"message": "deployment deleted"})
+}
+
 func (h *DeployHandler) Rollback(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

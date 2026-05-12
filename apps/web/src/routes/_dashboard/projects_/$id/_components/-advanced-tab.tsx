@@ -653,12 +653,12 @@ function SourceProviderCard({ app, appId }: { app: App; appId: string }) {
       {/* Source type indicator */}
       <div className="mb-4 inline-flex rounded-lg border bg-muted p-0.5">
         <span
-          className={`rounded-md px-3 py-1 text-xs font-medium ${!isGit ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+          className={`rounded-md px-3 py-1 text-xs font-medium ${!isGit ? "bg-background text-foreground" : "text-muted-foreground"}`}
         >
           Docker Image
         </span>
         <span
-          className={`rounded-md px-3 py-1 text-xs font-medium ${isGit ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+          className={`rounded-md px-3 py-1 text-xs font-medium ${isGit ? "bg-background text-foreground" : "text-muted-foreground"}`}
         >
           Git Repository
         </span>

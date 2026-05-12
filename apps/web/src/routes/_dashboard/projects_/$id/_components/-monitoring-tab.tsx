@@ -78,7 +78,7 @@ function ChartTooltip({
   const pct = limit > 0 ? ((used / limit) * 100).toFixed(1) : "0";
 
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
+    <div className="rounded-lg border bg-popover px-3 py-2 text-xs">
       <p className="mb-1 text-xs text-muted-foreground">{label}</p>
       <span className="font-semibold">{formatter(used)}</span>
       <span className="text-muted-foreground">

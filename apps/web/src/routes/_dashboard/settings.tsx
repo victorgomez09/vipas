@@ -95,8 +95,8 @@ function SettingsPage() {
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
       <p className="text-sm text-muted-foreground">Manage system configuration</p>
 
-      <Tabs defaultValue="general" className="mt-6">
-        <TabsList>
+      <Tabs defaultValue="general" orientation="vertical" className="mt-6 flex gap-2">
+        <TabsList className="flex-col w-[10em] h-full">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="backup">Backup</TabsTrigger>
           <TabsTrigger value="smtp">SMTP</TabsTrigger>
@@ -104,21 +104,23 @@ function SettingsPage() {
           <TabsTrigger value="team">Team</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general">
-          <GeneralTab />
-        </TabsContent>
-        <TabsContent value="backup">
-          <BackupTab />
-        </TabsContent>
-        <TabsContent value="smtp">
-          <SMTPTab />
-        </TabsContent>
-        <TabsContent value="notifications">
-          <NotificationsTab />
-        </TabsContent>
-        <TabsContent value="team">
-          <TeamTab />
-        </TabsContent>
+        <div className="flex-1">
+          <TabsContent value="general">
+            <GeneralTab />
+          </TabsContent>
+          <TabsContent value="backup">
+            <BackupTab />
+          </TabsContent>
+          <TabsContent value="smtp">
+            <SMTPTab />
+          </TabsContent>
+          <TabsContent value="notifications">
+            <NotificationsTab />
+          </TabsContent>
+          <TabsContent value="team">
+            <TeamTab />
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
@@ -470,7 +472,7 @@ function GeneralTab() {
   }
 
   return (
-    <div className="mt-4 space-y-6">
+    <div className="space-y-6">
       {/* Server info */}
       <Card>
         <CardHeader>
@@ -711,9 +713,9 @@ function GeneralTab() {
   );
 }
 
-function LoadBalancerCard({ 
-  settings, 
-  saveSetting 
+function LoadBalancerCard({
+  settings,
+  saveSetting
 }: { settings: Record<string, string>; saveSetting: ReturnType<typeof useUpdateSetting> }) {
   const { status, loading } = useLBStatus();
   const [lbType, setLbType] = useState(settings?.lb_type ?? "nodeport");
@@ -917,7 +919,7 @@ function BackupTab() {
   if (configLoading) return <LoadingScreen />;
 
   return (
-    <div className="mt-4 space-y-6">
+    <div className="space-y-6">
       {/* Backup Configuration */}
       <Card>
         <CardHeader>
@@ -1156,7 +1158,7 @@ function SMTPTab() {
   if (isLoading) return <LoadingScreen />;
 
   return (
-    <div className="mt-4 space-y-6">
+    <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -1287,7 +1289,7 @@ function NotificationsTab() {
   if (isLoading) return <LoadingScreen />;
 
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       {CHANNEL_DEFS.map((def) => {
         const existing = channels?.find((c) => c.type === def.type);
         return <ChannelCard key={def.type} def={def} existing={existing} />;
@@ -1342,7 +1344,7 @@ function ChannelCard({
               <Label>{field.label}</Label>
               {"multiline" in field && field.multiline ? (
                 <textarea
-                  className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={config[field.key] ?? ""}
                   onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
                   placeholder={field.placeholder}
@@ -1433,7 +1435,7 @@ function TeamTab() {
   const pendingInvitations = (invitations ?? []).filter((inv) => !inv.accepted_at);
 
   return (
-    <div className="mt-4 space-y-6">
+    <div className="space-y-6">
       {/* Members */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

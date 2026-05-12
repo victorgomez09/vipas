@@ -183,6 +183,18 @@ export function useCancelDeploy(appId: string) {
   });
 }
 
+export function useDeleteDeploy(appId: string) {
+  const invalidate = useInvalidateApp(appId);
+  return useMutation({
+    mutationFn: (deployId: string) => api.delete(`/api/v1/deployments/${deployId}`),
+    onSuccess: () => {
+      toast.success("Deployment deleted");
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.detail || "Delete failed"),
+  });
+}
+
 export function useClearBuildCache(appId: string) {
   return useMutation({
     mutationFn: () => api.post(`/api/v1/apps/${appId}/clear-cache`),

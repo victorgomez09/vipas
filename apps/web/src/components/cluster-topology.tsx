@@ -44,7 +44,7 @@ function TopoNode({
 
   return (
     <div
-      className="relative rounded-lg border bg-card px-3 py-2 shadow-sm transition-shadow hover:shadow-md"
+      className="relative rounded-lg border bg-card px-3 py-2"
       style={{ borderLeftColor: meta.color, borderLeftWidth: 3, minWidth: 170, maxWidth: 220 }}
     >
       <Handle
@@ -288,7 +288,7 @@ function TopologyInner({ data }: { data: TopoData }) {
   }, [fitView]);
 
   return (
-    <div className="h-[540px] w-full overflow-hidden rounded-lg border bg-card">
+    <div className="h-[540px] w-full overflow-hidden rounded-lg bg-card">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -308,7 +308,7 @@ function TopologyInner({ data }: { data: TopoData }) {
       >
         <Background gap={16} size={1} className="opacity-30" />
         <Panel position="top-left">
-          <div className="flex items-center gap-3 rounded-md border bg-card/90 px-3 py-1.5 text-[10px] shadow-sm backdrop-blur">
+          <div className="flex items-center gap-3 rounded-md border bg-card/90 px-3 py-1.5 text-[10px] backdrop-blur">
             {(["route", "service", "deployment", "pod", "node"] as const).map((type) => {
               const m = TYPE_META[type];
               const Icon = m.icon;

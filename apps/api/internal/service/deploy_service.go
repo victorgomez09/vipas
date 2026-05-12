@@ -361,6 +361,10 @@ func (s *DeployService) Cancel(ctx context.Context, deployID uuid.UUID) error {
 	app, err := s.store.Applications().GetByID(ctx, deploy.AppID)
 	if err == nil {
 		s.cleanupBuildJobs(ctx, app)
+		// If we were already in deployment phase, stop the app to clean up failing pods
+		if deploy.Status == model.DeployDeploying {
+			_ = s.orch.Stop(ctx, app)
+		}
 	}
 
 	// Update status
@@ -393,6 +397,21 @@ func (s *DeployService) Cancel(ctx context.Context, deployID uuid.UUID) error {
 
 	s.logger.Info("deployment cancelled", slog.String("deploy", deployID.String()))
 	return nil
+}
+
+// Delete removes a deployment record and stops it if it's currently running.
+func (s *DeployService) Delete(ctx context.Context, id uuid.UUID) error {
+	deploy, err := s.store.Deployments().GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// If the deployment is active, cancel it first to clean up K8s resources
+	if deploy.Status == model.DeployQueued || deploy.Status == model.DeployBuilding || deploy.Status == model.DeployDeploying {
+		_ = s.Cancel(ctx, id)
+	}
+
+	return s.store.Deployments().Delete(ctx, id)
 }
 
 func (s *DeployService) cleanupBuildJobs(ctx context.Context, app *model.Application) {
@@ -440,12 +459,16 @@ func (s *DeployService) Rollback(ctx context.Context, deployID uuid.UUID, trigge
 		TriggeredBy: triggeredBy,
 		StartedAt:   &now,
 		FinishedAt:  &now,
+		AppName:     app.Name,
+		ProjectID:   app.ProjectID,
 	}
 
 	if err := s.store.Deployments().Create(ctx, deploy); err != nil {
 		return nil, err
 	}
 
+	app.DockerImage = prev.Image
+	_ = s.store.Applications().Update(ctx, app)
 	s.setAppStatus(ctx, app.ID, model.AppStatusRunning)
 	s.logger.Info("rollback succeeded", slog.String("app", app.Name), slog.String("to_deploy", deployID.String()))
 

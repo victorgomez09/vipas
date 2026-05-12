@@ -214,9 +214,10 @@ function ResourcesPage() {
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as ResourceType)}
-        className="mt-6"
+        orientation="vertical"
+        className="mt-6 flex gap-2"
       >
-        <TabsList>
+        <TabsList className="flex-col w-[10em] h-full">
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label}
@@ -224,6 +225,7 @@ function ResourcesPage() {
           ))}
         </TabsList>
 
+          <div className="flex-1">
         {TABS.map((t) => (
           <TabsContent key={t.value} value={t.value}>
             {t.value === "git_provider" ? (
@@ -233,6 +235,7 @@ function ResourcesPage() {
             )}
           </TabsContent>
         ))}
+        </div>
       </Tabs>
     </div>
   );
@@ -383,7 +386,7 @@ function GitProviderTab() {
   const resources = data ?? [];
 
   return (
-    <div className="mt-3 space-y-4">
+    <div className="space-y-4">
       {/* Provider connection cards */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* GitHub - OAuth */}
@@ -887,7 +890,7 @@ function ResourceTab({
   const resources = data ?? [];
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-end gap-2">
         {type === "ssh_key" && (
           <Button size="sm" variant="outline" onClick={() => setShowGenerate(true)}>

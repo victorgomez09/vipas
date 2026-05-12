@@ -18,8 +18,8 @@ function FlowNode({
 }) {
   return (
     <div
-      className={`rounded-lg border bg-card p-4 shadow-sm transition-all ${
-        highlight ? "border-primary/40 shadow-primary/5" : ""
+      className={`rounded-lg border bg-card p-4 transition-all ${
+        highlight ? "border-primary/40" : ""
       }`}
     >
       <div className="mb-2 flex items-center gap-2">

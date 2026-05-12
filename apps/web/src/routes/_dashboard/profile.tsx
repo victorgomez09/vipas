@@ -369,7 +369,7 @@ function ProfilePage() {
 
                   {/* Right: QR code */}
                   <div className="flex items-start justify-center">
-                    <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="rounded-xl border bg-white p-4">
                       <QRCodeSVG value={tfaSetupData.qr_code} size={160} />
                     </div>
                   </div>
@@ -480,7 +480,7 @@ function AppearanceCard() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
                   active
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-background text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >

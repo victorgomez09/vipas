@@ -68,3 +68,8 @@ func (s *deploymentStore) GetLatestByApp(ctx context.Context, appID uuid.UUID) (
 		Scan(ctx)
 	return deploy, err
 }
+
+func (s *deploymentStore) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := s.db.NewDelete().Model((*model.Deployment)(nil)).Where("id = ?", id).Exec(ctx)
+	return err
+}

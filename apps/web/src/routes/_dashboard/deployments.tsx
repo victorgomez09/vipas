@@ -46,8 +46,8 @@ function DeploymentsPage() {
       />
       <Separator className="my-5" />
 
-      <Tabs defaultValue="all">
-        <TabsList>
+      <Tabs defaultValue="all" orientation="vertical" className="flex gap-4 w-full h-full">
+        <TabsList className="flex-col w-[10em] h-full">
           <TabsTrigger value="all" className="gap-1.5">
             <Layers className="h-3.5 w-3.5" />
             All
@@ -63,112 +63,114 @@ function DeploymentsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="queue" className="mt-4">
-          {queueError ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10 text-destructive">
-                <p className="text-sm">Failed to load deployment queue.</p>
-              </CardContent>
-            </Card>
-          ) : queue.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                  <Clock className="h-5 w-5 text-primary" />
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  No active deployments in queue.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {queue.map((d) => (
-                <DeploymentRow key={d.id} deploy={d} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="all" className="mt-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select
-              value={statusFilter || "all"}
-              onValueChange={(v) => {
-                setStatusFilter(v === "all" ? "" : v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="queued">Queued</SelectItem>
-                <SelectItem value="building">Building</SelectItem>
-                <SelectItem value="deploying">Deploying</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {allError ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10 text-destructive">
-                <p className="text-sm">Failed to load deployments.</p>
-              </CardContent>
-            </Card>
-          ) : isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : all.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                  <Layers className="h-5 w-5 text-primary" />
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">No deployments found.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
+        <div className="flex-1">
+          <TabsContent value="queue" className="">
+            {queueError ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10 text-destructive">
+                  <p className="text-sm">Failed to load deployment queue.</p>
+                </CardContent>
+              </Card>
+            ) : queue.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                    <Clock className="h-5 w-5 text-primary" />
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    No active deployments in queue.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
               <div className="space-y-4">
-                {all.map((d) => (
+                {queue.map((d) => (
                   <DeploymentRow key={d.id} deploy={d} />
                 ))}
               </div>
-              {pagination && totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Page {pagination.page} of {totalPages} ({pagination.total} total)
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={page <= 1}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Next
-                    </Button>
+            )}
+          </TabsContent>
+
+          <TabsContent value="all" className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select
+                value={statusFilter || "all"}
+                onValueChange={(v) => {
+                  setStatusFilter(v === "all" ? "" : v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="queued">Queued</SelectItem>
+                  <SelectItem value="building">Building</SelectItem>
+                  <SelectItem value="deploying">Deploying</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {allError ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10 text-destructive">
+                  <p className="text-sm">Failed to load deployments.</p>
+                </CardContent>
+              </Card>
+            ) : isLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : all.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                    <Layers className="h-5 w-5 text-primary" />
                   </div>
+                  <p className="mt-3 text-sm text-muted-foreground">No deployments found.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  {all.map((d) => (
+                    <DeploymentRow key={d.id} deploy={d} />
+                  ))}
                 </div>
-              )}
-            </>
-          )}
-        </TabsContent>
+                {pagination && totalPages > 1 && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Page {pagination.page} of {totalPages} ({pagination.total} total)
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page <= 1}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
@@ -178,8 +180,8 @@ function DeploymentRow({ deploy }: { deploy: Deployment }) {
   const duration =
     deploy.started_at && deploy.finished_at
       ? formatDuration(
-          new Date(deploy.finished_at).getTime() - new Date(deploy.started_at).getTime(),
-        )
+        new Date(deploy.finished_at).getTime() - new Date(deploy.started_at).getTime(),
+      )
       : deploy.started_at
         ? "running..."
         : "-";

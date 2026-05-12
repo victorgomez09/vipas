@@ -114,7 +114,7 @@ function AppsPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-4">
             {apps.map((app) => (
               <AppRow key={app.id} app={app} projectName={projectMap.get(app.project_id)} />
             ))}

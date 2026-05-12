@@ -141,7 +141,7 @@ function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-4">
       {/* ── Header ── */}
       <div>
         <p className="text-sm font-medium text-muted-foreground">Overview</p>
@@ -184,7 +184,7 @@ function DashboardPage() {
       </div>
 
       {/* ── Content Grid ── */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Alerts */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -260,7 +260,7 @@ function DashboardPage() {
                 {allApps.slice(0, 6).map((app) => (
                   <div
                     key={app.id}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/50"
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors cursor-pointer hover:bg-primary/10 hover:font-semibold"
                   >
                     <span
                       className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusDotColor(app.status)}`}

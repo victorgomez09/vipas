@@ -117,7 +117,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 	o.logger.Info("gateway created", slog.String("name", gwName))
 
 	// The Envoy dataplane Service is automatically created by the controller but we
-	// need to ensure it's a LoadBalancer and has the 'vipas' label for Cilium L2.
+	// need to ensure it's a LoadBalancer and has the 'vipas' label for MetalLB L2.
 	// Naming pattern: envoy-<gateway-namespace>-<gateway-name>
 	svcNS := "gateway-system"
 	svcName := fmt.Sprintf("envoy-%s-%s", svcNS, gwName)
@@ -156,7 +156,7 @@ func (o *Orchestrator) EnsureGateway(ctx context.Context) error {
 			return err
 		}
 
-		// Actualiza: asegura que la etiqueta para Cilium L2 esté presente y el tipo de servicio sea LoadBalancer
+		// Actualiza: asegura que la etiqueta para MetalLB L2 esté presente y el tipo de servicio sea LoadBalancer
 		if svc.Labels == nil {
 			svc.Labels = make(map[string]string)
 		}

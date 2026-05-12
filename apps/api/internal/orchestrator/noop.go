@@ -22,7 +22,8 @@ func NewNoop(logger *slog.Logger) *NoopOrchestrator {
 }
 
 func (n *NoopOrchestrator) Deploy(ctx context.Context, app *model.Application, opts DeployOpts) error {
-	n.logger.Info("[noop] deploy", slog.String("app", app.Name))
+	n.logger.Info("[noop] deploy", slog.String("app", app.Name), slog.String("storage_class", opts.StorageClass), slog.Int("longhorn_replicas", int(opts.LonghornReplicas)))
+	n.logger.Info("[noop] deploy", slog.String("app", app.Name), slog.String("storage_class", opts.StorageClass))
 	return nil
 }
 
@@ -550,6 +551,11 @@ func (n *NoopOrchestrator) ExpandVolume(ctx context.Context, name, namespace, ne
 	return nil
 }
 
+func (n *NoopOrchestrator) EnsureLonghornStorageClass(ctx context.Context, replicas int32) error {
+	n.logger.Info("[noop] ensure longhorn storage class", slog.Int("replicas", int(replicas)))
+	return nil
+}
+
 // ── Panel Ingress ───────────────────────────────────────────────
 
 // legacy panel ingress functions removed
@@ -626,7 +632,7 @@ func (n *NoopOrchestrator) EnsureLoadBalancer(ctx context.Context, lbType, ipPoo
 
 func (n *NoopOrchestrator) GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error) {
 	n.logger.Info("[noop] get lb status")
-	return &LBStatus{Type: "cilium-l2", IPPools: []string{}, AssignedIPs: []string{}}, nil
+	return &LBStatus{Type: "metallb-l2", IPPools: []string{}, AssignedIPs: []string{}}, nil
 }
 
 // Traefik-specific handlers removed; Gateway API methods implemented elsewhere.

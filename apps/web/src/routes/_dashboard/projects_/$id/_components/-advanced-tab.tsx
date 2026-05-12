@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   Activity,
   Cpu,
@@ -10,6 +11,7 @@ import {
   Plus,
   Save,
   Server,
+  Database as StorageIcon,
   Settings2,
   Shield,
   Timer,
@@ -1156,6 +1158,80 @@ function NodePoolCard({ app, appId }: { app: App; appId: string }) {
   );
 }
 
+// ── 10. Storage Configuration ─────────────────────────────────────
+
+function StorageCard({ app, appId }: { app: App; appId: string }) {
+  const updateApp = useUpdateApp(appId);
+  const [storageClass, setStorageClass] = useState(app.storage_class || "local-path");
+  const [longhornReplicas, setLonghornReplicas] = useState(String(app.longhorn_replicas || 3));
+  const dirty = storageClass !== (app.storage_class || "local-path");
+
+  return (
+    <SectionCard
+      icon={StorageIcon}
+      title="Distributed Storage"
+      description="Configure the storage backend for your application volumes."
+      dirty={dirty}
+      saving={updateApp.isPending}
+      onSave={() =>
+        updateApp.mutate({ storage_class: storageClass, longhorn_replicas: Number(longhornReplicas) })
+      }
+    >
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Storage Class</Label>
+          <Select value={storageClass} onValueChange={setStorageClass}>
+            <SelectTrigger className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="local-path">Local Path (Single Node)</SelectItem>
+              <SelectItem value="longhorn">Longhorn (Distributed / HA)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {storageClass === "longhorn" 
+              ? "Data will be replicated across nodes. Safe for multi-node clusters."
+              : "Data stays on the node where the pod is running. Faster, but not HA."}
+          </p>
+        </div>
+        {storageClass === "longhorn" && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Longhorn Replicas</Label>
+            <Select value={longhornReplicas} onValueChange={setLonghornReplicas}>
+              <SelectTrigger className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3].map((r) => (
+                  <SelectItem key={r} value={String(r)}>
+                    {r} {r === 1 ? "Replica (No HA)" : "Replicas (HA)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Number of copies of your data. More replicas increase data durability but use more
+              storage.
+            </p>
+          </div>
+        )}
+        {storageClass === "longhorn" && (
+          <div className="flex flex-col gap-2">
+            <InfoBanner>Longhorn manages volume snapshots and replication automatically.</InfoBanner>
+            <p className="text-[10px] text-muted-foreground px-1">
+              Global storage defaults can be managed in{" "}
+              <Link to="/settings" className="text-primary underline underline-offset-4">
+                System Settings
+              </Link>.
+            </p>
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function SettingsTab({
   app,
   appId,
@@ -1174,6 +1250,7 @@ export function SettingsTab({
       {/* Runtime configuration */}
       <ResourcesCard app={app} appId={appId} />
       <PortsCard app={app} appId={appId} />
+      <StorageCard app={app} appId={appId} />
       <HealthCheckCard app={app} appId={appId} />
       <DeployStrategyCard app={app} appId={appId} />
       <AutoscalingCard app={app} appId={appId} />

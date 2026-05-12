@@ -28,39 +28,43 @@ func NewAppService(s store.Store, orch orchestrator.Orchestrator, logger *slog.L
 }
 
 type CreateAppInput struct {
-	ProjectID     uuid.UUID           `json:"project_id" binding:"required"`
-	Name          string              `json:"name" binding:"required,min=1,max=63"`
-	SourceType    model.SourceType    `json:"source_type" binding:"required,oneof=git image"`
-	GitRepo       string              `json:"git_repo" binding:"required_if=SourceType git"`
-	GitBranch     string              `json:"git_branch"`
-	GitProviderID *uuid.UUID          `json:"git_provider_id"`
-	DockerImage   string              `json:"docker_image" binding:"required_if=SourceType image"`
-	BuildType     model.BuildType     `json:"build_type"`
-	Dockerfile    string              `json:"dockerfile"`
-	Replicas      int32               `json:"replicas"`
-	CPULimit      string              `json:"cpu_limit"`
-	MemLimit      string              `json:"mem_limit"`
-	EnvVars       map[string]string   `json:"env_vars"`
-	Ports         []model.PortMapping `json:"ports"`
+	ProjectID        uuid.UUID           `json:"project_id" binding:"required"`
+	Name             string              `json:"name" binding:"required,min=1,max=63"`
+	SourceType       model.SourceType    `json:"source_type" binding:"required,oneof=git image"`
+	GitRepo          string              `json:"git_repo" binding:"required_if=SourceType git"`
+	GitBranch        string              `json:"git_branch"`
+	GitProviderID    *uuid.UUID          `json:"git_provider_id"`
+	DockerImage      string              `json:"docker_image" binding:"required_if=SourceType image"`
+	BuildType        model.BuildType     `json:"build_type"`
+	Dockerfile       string              `json:"dockerfile"`
+	Replicas         int32               `json:"replicas"`
+	CPULimit         string              `json:"cpu_limit"`
+	MemLimit         string              `json:"mem_limit"`
+	EnvVars          map[string]string   `json:"env_vars"`
+	Ports            []model.PortMapping `json:"ports"`
+	LonghornReplicas int32               `json:"longhorn_replicas"`
+	StorageClass     *string             `json:"storage_class"`
 }
 
 func (s *AppService) Create(ctx context.Context, input CreateAppInput) (*model.Application, error) {
 	app := &model.Application{
-		ProjectID:     input.ProjectID,
-		Name:          input.Name,
-		SourceType:    input.SourceType,
-		GitRepo:       input.GitRepo,
-		GitBranch:     input.GitBranch,
-		GitProviderID: input.GitProviderID,
-		DockerImage:   input.DockerImage,
-		BuildType:     input.BuildType,
-		Dockerfile:    input.Dockerfile,
-		Replicas:      input.Replicas,
-		CPULimit:      input.CPULimit,
-		MemLimit:      input.MemLimit,
-		EnvVars:       input.EnvVars,
-		Ports:         input.Ports,
-		Status:        model.AppStatusIdle,
+		ProjectID:        input.ProjectID,
+		Name:             input.Name,
+		SourceType:       input.SourceType,
+		GitRepo:          input.GitRepo,
+		GitBranch:        input.GitBranch,
+		GitProviderID:    input.GitProviderID,
+		DockerImage:      input.DockerImage,
+		BuildType:        input.BuildType,
+		Dockerfile:       input.Dockerfile,
+		Replicas:         input.Replicas,
+		CPULimit:         input.CPULimit,
+		MemLimit:         input.MemLimit,
+		EnvVars:          input.EnvVars,
+		Ports:            input.Ports,
+		LonghornReplicas: input.LonghornReplicas,
+		StorageClass:     "local-path", // Default value
+		Status:           model.AppStatusIdle,
 	}
 
 	// Apply defaults
@@ -81,6 +85,12 @@ func (s *AppService) Create(ctx context.Context, input CreateAppInput) (*model.A
 	}
 	if app.Dockerfile == "" {
 		app.Dockerfile = "Dockerfile"
+	}
+	if app.LonghornReplicas == 0 {
+		app.LonghornReplicas = 3 // Default for Longhorn
+	}
+	if input.StorageClass != nil {
+		app.StorageClass = *input.StorageClass
 	}
 
 	// Default container port based on common images
@@ -191,12 +201,14 @@ type UpdateAppInput struct {
 	NoCache      *bool             `json:"no_cache"`
 
 	// Runtime configuration
-	CPULimit   *string             `json:"cpu_limit"`
-	MemLimit   *string             `json:"mem_limit"`
-	CPURequest *string             `json:"cpu_request"`
-	MemRequest *string             `json:"mem_request"`
-	Ports      []model.PortMapping `json:"ports"`
-	NodePool   *string             `json:"node_pool"`
+	CPULimit         *string             `json:"cpu_limit"`
+	MemLimit         *string             `json:"mem_limit"`
+	CPURequest       *string             `json:"cpu_request"`
+	MemRequest       *string             `json:"mem_request"`
+	Ports            []model.PortMapping `json:"ports"`
+	NodePool         *string             `json:"node_pool"`
+	LonghornReplicas *int32              `json:"longhorn_replicas"`
+	StorageClass     *string             `json:"storage_class"`
 
 	// Advanced configuration
 	HealthCheck            *model.HealthCheck          `json:"health_check"`
@@ -282,6 +294,14 @@ func (s *AppService) Update(ctx context.Context, id uuid.UUID, input UpdateAppIn
 	}
 	if input.NodePool != nil {
 		app.NodePool = *input.NodePool
+		runtimeChanged = true
+	}
+	if input.StorageClass != nil {
+		app.StorageClass = *input.StorageClass
+		runtimeChanged = true
+	}
+	if input.LonghornReplicas != nil {
+		app.LonghornReplicas = *input.LonghornReplicas
 		runtimeChanged = true
 	}
 	if input.HealthCheck != nil {
@@ -464,6 +484,8 @@ func (s *AppService) Update(ctx context.Context, id uuid.UUID, input UpdateAppIn
 			DeployStrategyConfig:   app.DeployStrategyConfig,
 			TerminationGracePeriod: app.TerminationGracePeriod,
 			NodePool:               app.NodePool,
+			LonghornReplicas:       app.LonghornReplicas,
+			StorageClass:           app.StorageClass,
 		}); err != nil {
 			return rollback("failed to apply deployment changes", err)
 		}

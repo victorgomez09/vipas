@@ -124,6 +124,8 @@ type Application struct {
 	DeployStrategy         string                `bun:"deploy_strategy,default:'rolling'" json:"deploy_strategy"`
 	DeployStrategyConfig   *DeployStrategyConfig `bun:"deploy_strategy_config,type:jsonb,default:'{}'" json:"deploy_strategy_config"`
 	TerminationGracePeriod int                   `bun:"termination_grace_period,default:30" json:"termination_grace_period"`
+	LonghornReplicas       int32                 `bun:"longhorn_replicas,default:3" json:"longhorn_replicas"`
+	StorageClass           string                `bun:"storage_class,default:'local-path'" json:"storage_class"`
 	NodePool               string                `bun:"node_pool,default:''" json:"node_pool"`
 	BuildEnvVars           map[string]string     `bun:"build_env_vars,type:jsonb,default:'{}'" json:"build_env_vars"`
 

@@ -34,6 +34,7 @@ type CreateDatabaseInput struct {
 	StorageSize  string         `json:"storage_size"`
 	CPULimit     string         `json:"cpu_limit"`
 	MemLimit     string         `json:"mem_limit"`
+	StorageClass string         `json:"storage_class"`
 }
 
 // safeNameRe validates database/service names: alphanumeric, hyphens, underscores only.
@@ -77,6 +78,7 @@ func (s *DatabaseService) Create(ctx context.Context, input CreateDatabaseInput)
 		CPULimit:     input.CPULimit,
 		MemLimit:     input.MemLimit,
 		Namespace:    project.Namespace,
+		StorageClass: input.StorageClass,
 		Status:       model.AppStatusIdle,
 	}
 
@@ -88,6 +90,9 @@ func (s *DatabaseService) Create(ctx context.Context, input CreateDatabaseInput)
 	}
 	if db.MemLimit == "" {
 		db.MemLimit = "512Mi"
+	}
+	if db.StorageClass == "" {
+		db.StorageClass = "local-path"
 	}
 
 	// Check for K8s name conflicts in the same project (apps + databases share namespace)

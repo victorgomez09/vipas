@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Container,
   Database,
+  Info,
   Plus,
   Rocket,
   Save,
@@ -97,6 +98,7 @@ function ProjectDetailPage() {
     engine: "postgres",
     version: "",
     storage_size: "1Gi",
+    storage_class: "local-path",
   });
   const [editName, setEditName] = useState(project?.name ?? "");
   const [editDesc, setEditDesc] = useState(project?.description ?? "");
@@ -153,6 +155,7 @@ function ProjectDetailPage() {
         engine: "postgres",
         version: "",
         storage_size: "1Gi",
+        storage_class: "local-path",
       });
     }
     setShowCreate(false);
@@ -163,101 +166,98 @@ function ProjectDetailPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center">
-        <PageHeader
-          title={project.name}
-          description={project.description || undefined}
-          badges={
-            project.namespace ? (
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                {project.namespace}
-              </code>
-            ) : undefined
-          }
-          backTo="/projects"
-        />
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> New Service
-        </Button>
-      </div>
-
+      <PageHeader
+        title={project.name}
+        description={project.description || undefined}
+        badges={
+          project.namespace ? (
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              {project.namespace}
+            </code>
+          ) : undefined
+        }
+        backTo="/projects"
+      />
       <Separator className="my-5" />
 
-      <Tabs defaultValue="services" orientation="vertical" className="flex flex-wrap gap-4 h-full">
-        <TabsList className="flex-col w-[10em] h-full">
-          <TabsTrigger value="services">Services</TabsTrigger>
-          <TabsTrigger value="environment">Environment</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        <div className="flex-1">
-          {/* ── Services tab ── */}
-          <TabsContent value="services" className="mt-0">
-            {services.length === 0 ? (
-              <EmptyState
-                icon={Container}
-                message="No services yet."
-                actionLabel="New Service"
-                onAction={() => setShowCreate(true)}
-              />
-            ) : (
-              <ServiceList services={services} projectId={projectId} onDelete={setDeleteTarget} />
-            )}
-          </TabsContent>
-
-          {/* ── Environment tab ── */}
-          <TabsContent value="environment" className="mt-0">
-            <ProjectEnvEditor
-              key={JSON.stringify(project.env_vars)}
-              projectId={projectId}
-              envVars={project.env_vars}
-            />
-          </TabsContent>
-
-          {/* ── Settings tab ── */}
-          <TabsContent value="settings" className="space-y-4 mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                  <Settings2 className="h-4 w-4" /> General
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Project Name</Label>
-                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-                </div>
-                <Button
-                  onClick={() => updateProject.mutate({ name: editName, description: editDesc })}
-                  disabled={updateProject.isPending}
-                >
-                  {updateProject.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Service Account</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-mono text-sm">
-                  {project.service_account || (
-                    <span className="text-muted-foreground">Auto-created on deploy</span>
-                  )}
-                </p>
-              </CardContent>
-            </Card>
-            <DangerZone
-              description="Permanently delete this project and all services."
-              buttonLabel="Delete Project"
-              onDelete={() => setShowDeleteProject(true)}
-            />
-          </TabsContent>
+      <Tabs defaultValue="services">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="services">Services</TabsTrigger>
+            <TabsTrigger value="environment">Environment</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" /> New Service
+          </Button>
         </div>
+
+        {/* ── Services tab ── */}
+        <TabsContent value="services" className="mt-4">
+          {services.length === 0 ? (
+            <EmptyState
+              icon={Container}
+              message="No services yet."
+              actionLabel="New Service"
+              onAction={() => setShowCreate(true)}
+            />
+          ) : (
+            <ServiceList services={services} projectId={projectId} onDelete={setDeleteTarget} />
+          )}
+        </TabsContent>
+
+        {/* ── Environment tab ── */}
+        <TabsContent value="environment" className="mt-4">
+          <ProjectEnvEditor
+            key={JSON.stringify(project.env_vars)}
+            projectId={projectId}
+            envVars={project.env_vars}
+          />
+        </TabsContent>
+
+        {/* ── Settings tab ── */}
+        <TabsContent value="settings" className="mt-4 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Settings2 className="h-4 w-4" /> General
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Project Name</Label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+              </div>
+              <Button
+                onClick={() => updateProject.mutate({ name: editName, description: editDesc })}
+                disabled={updateProject.isPending}
+              >
+                {updateProject.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Service Account</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="font-mono text-sm">
+                {project.service_account || (
+                  <span className="text-muted-foreground">Auto-created on deploy</span>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+          <DangerZone
+            description="Permanently delete this project and all services."
+            buttonLabel="Delete Project"
+            onDelete={() => setShowDeleteProject(true)}
+          />
+        </TabsContent>
       </Tabs>
 
       {/* ── Create Service Dialog ── */}
@@ -566,8 +566,9 @@ function CreateServiceDialog({
                 key={type}
                 type="button"
                 onClick={() => onServiceTypeChange(type)}
-                className={`flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-colors ${active ? "border-primary bg-primary/5" : "hover:bg-accent"
-                  }`}
+                className={`flex flex-col items-center gap-2 rounded-lg border p-4 text-sm transition-colors ${
+                  active ? "border-primary bg-primary/5" : "hover:bg-accent"
+                }`}
               >
                 <Icon className={`h-6 w-6 ${active ? "text-primary" : "text-muted-foreground"}`} />
                 <span className="font-medium">{label}</span>
@@ -602,7 +603,7 @@ function ImageSourceFields({
   onChange,
   registries,
 }: {
-  form: { docker_image: string;[key: string]: string };
+  form: { docker_image: string; [key: string]: string };
   onChange: (v: typeof form) => void;
   registries: SharedResource[];
 }) {
@@ -671,7 +672,7 @@ function GitSourceFields({
   onChange,
   gitProviders,
 }: {
-  form: { git_repo: string; git_branch: string;[key: string]: string };
+  form: { git_repo: string; git_branch: string; [key: string]: string };
   onChange: (v: typeof form) => void;
   gitProviders: { id: string; name: string; provider: string }[];
 }) {
@@ -882,6 +883,7 @@ function DbFormFields({
     engine: string;
     version: string;
     storage_size: string;
+    storage_class: string; // Added this field
   };
   onChange: (v: typeof form) => void;
 }) {
@@ -975,6 +977,31 @@ function DbFormFields({
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Storage Class</Label>
+        <Select
+          value={form.storage_class || "local-path"}
+          onValueChange={(v) => update("storage_class", v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="local-path">Local Path (Single Node)</SelectItem>
+            <SelectItem value="longhorn">Longhorn (Distributed / HA)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {form.storage_class === "longhorn"
+            ? "Data will be replicated across nodes. Safe for multi-node clusters."
+            : "Data stays on the node where the pod is running. Faster, but not HA."}
+        </p>
+        {form.storage_class === "longhorn" && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
+            <Info className="h-3.5 w-3.5 shrink-0" />Longhorn manages volume snapshots and replication automatically.
+          </div>
+        )}
       </div>
     </>
   );

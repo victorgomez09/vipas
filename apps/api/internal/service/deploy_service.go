@@ -237,6 +237,8 @@ func (s *DeployService) executeDeploy(ctx context.Context, app *model.Applicatio
 		DeployStrategyConfig:   app.DeployStrategyConfig,
 		TerminationGracePeriod: app.TerminationGracePeriod,
 		NodePool:               app.NodePool,
+		LonghornReplicas:       app.LonghornReplicas,
+		StorageClass:           app.StorageClass,
 	})
 
 	now := time.Now()

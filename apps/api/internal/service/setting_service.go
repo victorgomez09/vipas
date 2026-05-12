@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/victorgomez09/vipas/apps/api/internal/model"
@@ -222,6 +223,15 @@ func (s *SettingService) Set(ctx context.Context, key, value string) error {
 				return fmt.Errorf("setting saved, but external-dns not applied: %w", err)
 			}
 		}
+	case model.SettingLonghornDefaultReplicas:
+		replicas, err := strconv.ParseInt(value, 10, 32)
+		if err != nil || replicas < 1 || replicas > 5 { // Longhorn typically supports 1-5 replicas
+			return fmt.Errorf("invalid Longhorn replicas: %q (must be 1-5)", value)
+		}
+		if err := s.orch.EnsureLonghornStorageClass(ctx, int32(replicas)); err != nil {
+			s.logger.Warn("Longhorn default replicas saved but not applied", slog.Any("error", err))
+			return fmt.Errorf("setting saved, but Longhorn StorageClass not updated: %w", err)
+		}
 	}
 
 	return nil
@@ -259,7 +269,7 @@ func (s *SettingService) applyCertIssuer(ctx context.Context, issuer string) err
 }
 
 // applyLoadBalancerConfig applies LB settings. When lbType is empty it defaults
-// to cilium-l2 for single-node clusters (dev) and cilium-bgp for multi-node (prod).
+// to metallb-l2 for single-node clusters (dev) and metallb-bgp for multi-node (prod).
 func (s *SettingService) applyLoadBalancerConfig(ctx context.Context, lbType, ipPool string) error {
 	if lbType == "" {
 		lbType = s.defaultLBTypeByTopology(ctx)

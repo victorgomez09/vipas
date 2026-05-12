@@ -28,9 +28,10 @@ type ManagedDatabase struct {
 	Version      string   `bun:"version,notnull" json:"version"`
 
 	// Resources
-	StorageSize string `bun:"storage_size,default:'1Gi'" json:"storage_size"`
-	CPULimit    string `bun:"cpu_limit,default:'500m'" json:"cpu_limit"`
-	MemLimit    string `bun:"mem_limit,default:'512Mi'" json:"mem_limit"`
+	StorageSize  string `bun:"storage_size,default:'1Gi'" json:"storage_size"`
+	CPULimit     string `bun:"cpu_limit,default:'500m'" json:"cpu_limit"`
+	MemLimit     string `bun:"mem_limit,default:'512Mi'" json:"mem_limit"`
+	StorageClass string `bun:"storage_class,default:'local-path'" json:"storage_class"`
 
 	// Credentials (stored as K8s secret name)
 	CredentialsSecret string `bun:"credentials_secret" json:"-"`

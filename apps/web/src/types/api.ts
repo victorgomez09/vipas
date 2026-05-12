@@ -113,6 +113,8 @@ export interface App {
   // K8s mapping
   namespace: string;
   k8s_name: string;
+  storage_class: string;
+  longhorn_replicas: number;
   project_id: string;
   created_at: string;
 }
@@ -642,4 +644,18 @@ export interface DaemonSetInfo {
   node_selector: string;
   images: string;
   created_at: string;
+}
+
+export interface DomainVerificationResult {
+  domain: string;
+  dns: "ok" | "failed" | "wrong_ip";
+  dns_message?: string;
+  dns_ip?: string;
+  reachable?: boolean;
+  reachable_message?: string;
+  cert?: "valid" | "self_signed" | "cloudflare" | "none" | "unknown";
+  cert_message?: string;
+  cert_issuer?: string;
+  cert_expiry?: string;
+  cert_days?: number;
 }

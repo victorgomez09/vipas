@@ -117,8 +117,8 @@ function AppDetailPage() {
               liveStatus === "CrashLoopBackOff" ||
               liveStatus === "Error" ||
               liveStatus === "unhealthy") && (
-                <Button variant="destructive" onClick={() => setShowStop(true)}>
-                  <Trash className="size-4" /> Stop
+                <Button size="sm" variant="destructive" onClick={() => setShowStop(true)}>
+                  <Square className="h-3.5 w-3.5" /> Stop
                 </Button>
               )}
             <Button

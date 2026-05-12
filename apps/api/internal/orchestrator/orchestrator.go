@@ -112,6 +112,7 @@ type StorageManager interface {
 	CreateVolume(ctx context.Context, opts VolumeOpts) (string, error)
 	DeleteVolume(ctx context.Context, name, namespace string) error
 	ExpandVolume(ctx context.Context, name, namespace, newSize string) error
+	EnsureLonghornStorageClass(ctx context.Context, replicas int32) error
 }
 
 // NamespaceManager handles namespace lifecycle.
@@ -153,7 +154,7 @@ type NetworkPolicyManager interface {
 }
 
 // LoadBalancerManager handles installation and status reporting for cluster
-// load balancer implementations like Cilium BGP or Cilium L2 announcement.
+// load balancer implementations like MetalLB BGP or MetalLB L2 announcement.
 type LoadBalancerManager interface {
 	EnsureLoadBalancer(ctx context.Context, lbType, ipPool string) error
 	GetLoadBalancerStatus(ctx context.Context) (*LBStatus, error)
@@ -295,6 +296,8 @@ type DeployOpts struct {
 	DeployStrategyConfig   *model.DeployStrategyConfig
 	TerminationGracePeriod int
 	NodePool               string
+	StorageClass           string
+	LonghornReplicas       int32
 }
 
 type AppStatus struct {

@@ -215,7 +215,7 @@ function ResourcesPage() {
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as ResourceType)}
         orientation="vertical"
-        className="mt-6 flex gap-2"
+        className="mt-6 flex gap-4"
       >
         <TabsList className="flex-col w-[10em] h-full">
           {TABS.map((t) => (

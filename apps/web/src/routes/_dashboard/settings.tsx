@@ -6,7 +6,9 @@ import {
   Copy,
   Database,
   Globe,
+  HardDrive,
   Hash,
+  Info,
   Loader2,
   Mail,
   MessageSquare,
@@ -26,7 +28,7 @@ import { LoadingScreen } from "@/components/loading-screen";
 import type { BadgeProps } from "@/components/ui/badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -417,6 +419,7 @@ function GeneralTab() {
   const savePanel = useUpdateSetting();
   const saveEmail = useUpdateSetting();
   const saveDNS = useUpdateSetting();
+  const saveLonghorn = useUpdateSetting();
   const [baseDomain, setBaseDomain] = useState("");
   const [httpsEmail, setHttpsEmail] = useState("");
   const [dnsProvider, setDnsProvider] = useState("");
@@ -504,6 +507,9 @@ function GeneralTab() {
 
       {/* Load Balancer */}
       <LoadBalancerCard settings={settings} saveSetting={saveLBSetting} />
+
+      {/* Longhorn Distributed Storage */}
+      <LonghornCard settings={settings} saveSetting={saveLonghorn} />
 
       {/* Wildcard Domain */}
       <Card>
@@ -811,6 +817,83 @@ function LoadBalancerCard({
               Save Load Balancer
             </Button>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LonghornCard({
+  settings,
+  saveSetting,
+}: {
+  settings: Record<string, string>;
+  saveSetting: ReturnType<typeof useUpdateSetting>;
+}) {
+  const [replicas, setReplicas] = useState(settings?.longhorn_default_replicas ?? "3");
+
+  useEffect(() => {
+    if (settings?.longhorn_default_replicas) {
+      setReplicas(settings.longhorn_default_replicas);
+    }
+  }, [settings?.longhorn_default_replicas]);
+
+  const dirty = replicas !== (settings?.longhorn_default_replicas || "3");
+
+  return (
+    <Card className={dirty ? "border-primary/50" : ""}>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+            <HardDrive className="h-4 w-4" />
+          </div>
+          <div>
+            <CardTitle className="text-sm">Longhorn Distributed Storage</CardTitle>
+            <CardDescription className="text-xs">
+              Global configuration for high-availability volumes.
+            </CardDescription>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          disabled={!dirty || saveSetting.isPending}
+          onClick={() => saveSetting.mutate({ key: "longhorn_default_replicas", value: replicas })}
+        >
+          {saveSetting.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {saveSetting.isPending ? "Saving..." : "Save Changes"}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Default Replica Count</Label>
+          <Select value={replicas} onValueChange={setReplicas}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["1", "2", "3", "4", "5"].map((v) => (
+                <SelectItem key={v} value={v}>{v} Replicas</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            New volumes created using the HA Storage class will use this number of replicas by default.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <p>
+            Access the native dashboard for advanced management:{" "}
+            <a 
+              href={`http://longhorn.${settings?.base_domain || 'local'}`} 
+              target="_blank" 
+              rel="noreferrer" 
+              className="underline font-medium hover:text-blue-500"
+            >
+              longhorn.{settings?.base_domain || 'local'}
+            </a>
+          </p>
         </div>
       </CardContent>
     </Card>

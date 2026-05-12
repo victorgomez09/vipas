@@ -623,7 +623,7 @@ export function Sidebar() {
       <VersionIndicator collapsed={collapsed} />
 
       {/* AGPL attribution — see NOTICE. DO NOT REMOVE. */}
-      <div
+      {/* <div
         id={BRAND_ANCHOR}
         className={cn(
           "shrink-0 border-t",
@@ -671,7 +671,7 @@ export function Sidebar() {
             </a>
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Footer: User */}
       <div className="relative shrink-0 border-t px-2 py-2">

@@ -12,3 +12,11 @@ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/confi
 helm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.7.2 -n envoy-gateway-system --create-namespace
 
 kubectl create secret generic cloudflare-api-key --from-literal=apiKey=YOUR_API_TOKEN
+
+helm repo add longhorn https://charts.longhorn.io
+helm repo update
+
+helm install longhorn longhorn/longhorn \
+  --namespace longhorn-system \
+  --create-namespace \
+  --set defaultSettings.defaultDataLocality=best-effort

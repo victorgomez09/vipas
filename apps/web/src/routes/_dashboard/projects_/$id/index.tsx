@@ -542,7 +542,14 @@ function CreateServiceDialog({
     build_type: string;
   };
   onAppFormChange: (v: typeof appForm) => void;
-  dbForm: { name: string; engine: string; version: string; storage_size: string };
+  dbForm: {
+    name: string;
+    database_name: string;
+    engine: string;
+    version: string;
+    storage_size: string;
+    storage_class: string;
+  };
   onDbFormChange: (v: typeof dbForm) => void;
   creating: boolean;
   onSubmit: (e: React.FormEvent) => void;
@@ -603,11 +610,19 @@ function ImageSourceFields({
   onChange,
   registries,
 }: {
-  form: { docker_image: string; [key: string]: string };
+  form: {
+    name: string;
+    source_type: string;
+    docker_image: string;
+    git_repo: string;
+    git_branch: string;
+    build_type: string;
+  };
   onChange: (v: typeof form) => void;
   registries: SharedResource[];
 }) {
-  const update = (field: string, value: string) => onChange({ ...form, [field]: value });
+  const update = (field: string, value: string) =>
+    onChange({ ...form, [field]: value } as typeof form);
   const [selectedRegistry, setSelectedRegistry] = useState("dockerhub");
 
   const handleRegistryChange = (registryId: string) => {
@@ -672,7 +687,15 @@ function GitSourceFields({
   onChange,
   gitProviders,
 }: {
-  form: { git_repo: string; git_branch: string; [key: string]: string };
+  form: {
+    name: string;
+    source_type: string;
+    docker_image: string;
+    git_repo: string;
+    git_branch: string;
+    build_type: string;
+    git_provider_id?: string;
+  };
   onChange: (v: typeof form) => void;
   gitProviders: { id: string; name: string; provider: string }[];
 }) {
@@ -744,7 +767,7 @@ function GitSourceFields({
               <SelectTrigger>
                 <SelectValue placeholder="Select a repository..." />
               </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
+              <SelectContent className="max-h-75">
                 {repos.map((r) => (
                   <SelectItem key={r.full_name} value={r.full_name}>
                     {r.full_name}

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Container, GitBranch, Loader2, RefreshCw, Rocket, Square, Trash, X } from "lucide-react";
+import { Container, GitBranch, Loader2, RefreshCw, Rocket, Square } from "lucide-react";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { LoadingScreen } from "@/components/loading-screen";
@@ -100,7 +100,7 @@ function AppDetailPage() {
         }
         actions={
           <>
-            {(liveStatus === "running") && (
+            {liveStatus === "running" && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setShowRestart(true)}>
                   <RefreshCw className="h-3.5 w-3.5" /> Restart
@@ -117,10 +117,10 @@ function AppDetailPage() {
               liveStatus === "CrashLoopBackOff" ||
               liveStatus === "Error" ||
               liveStatus === "unhealthy") && (
-                <Button size="sm" variant="destructive" onClick={() => setShowStop(true)}>
-                  <Square className="h-3.5 w-3.5" /> Stop
-                </Button>
-              )}
+              <Button size="sm" variant="destructive" onClick={() => setShowStop(true)}>
+                <Square className="h-3.5 w-3.5" /> Stop
+              </Button>
+            )}
             <Button
               onClick={() => setShowDeploy(true)}
               disabled={
@@ -140,7 +140,11 @@ function AppDetailPage() {
       />
       <Separator className="my-5" />
 
-      <Tabs defaultValue="general" orientation="vertical" className="flex flex-wrap gap-4 w-full h-full">
+      <Tabs
+        defaultValue="general"
+        orientation="vertical"
+        className="flex flex-wrap gap-4 w-full h-full"
+      >
         <TabsList className="flex-col w-[10em] h-full">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="topology">Topology</TabsTrigger>

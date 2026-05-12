@@ -14,7 +14,7 @@ async function fetchLBStatus(): Promise<LBStatus> {
 
 export function useLBStatus() {
   const { data, error, isLoading, isFetching } = useQuery({
-    queryKey: ['lbStatus'],
+    queryKey: ["lbStatus"],
     queryFn: fetchLBStatus,
     refetchInterval: 5000,
   });

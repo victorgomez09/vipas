@@ -225,16 +225,16 @@ function ResourcesPage() {
           ))}
         </TabsList>
 
-          <div className="flex-1">
-        {TABS.map((t) => (
-          <TabsContent key={t.value} value={t.value}>
-            {t.value === "git_provider" ? (
-              <GitProviderTab />
-            ) : (
-              <ResourceTab type={t.value} icon={t.icon} />
-            )}
-          </TabsContent>
-        ))}
+        <div className="flex-1">
+          {TABS.map((t) => (
+            <TabsContent key={t.value} value={t.value}>
+              {t.value === "git_provider" ? (
+                <GitProviderTab />
+              ) : (
+                <ResourceTab type={t.value} icon={t.icon} />
+              )}
+            </TabsContent>
+          ))}
         </div>
       </Tabs>
     </div>

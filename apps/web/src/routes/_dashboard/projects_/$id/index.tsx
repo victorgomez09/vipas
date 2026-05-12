@@ -900,7 +900,7 @@ function DbFormFields({
         onChange({ ...form, version: fallback });
       }
     }
-  }, [versions, form.version, onChange]);
+  }, [versions, form, onChange]);
 
   return (
     <>
@@ -999,7 +999,8 @@ function DbFormFields({
         </p>
         {form.storage_class === "longhorn" && (
           <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
-            <Info className="h-3.5 w-3.5 shrink-0" />Longhorn manages volume snapshots and replication automatically.
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            Longhorn manages volume snapshots and replication automatically.
           </div>
         )}
       </div>

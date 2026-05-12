@@ -1,4 +1,4 @@
-export function Logo({ className }: { className?: string }) {
+export function Logo({ className: _className }: { className?: string }) {
   return (
     // <svg
     //   xmlns="http://www.w3.org/2000/svg"
@@ -14,6 +14,6 @@ export function Logo({ className }: { className?: string }) {
     //   <polygon points="23,17 16,21 16,29 23,25" fill="currentColor" opacity="0.22" />
     //   <polygon points="16,8 23,17 16,13" fill="currentColor" opacity="0.90" />
     // </svg>
-    <></>
+    <div></div>
   );
 }

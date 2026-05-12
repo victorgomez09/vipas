@@ -13,8 +13,7 @@ export function useSettings() {
 export function useUpdateSetting() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { key: string; value: string }) =>
-      api.put("/api/v1/settings", data),
+    mutationFn: (data: { key: string; value: string }) => api.put("/api/v1/settings", data),
     onSuccess: (res: any) => {
       if (res.warning) toast.warning(res.warning);
       else toast.success("Setting updated");

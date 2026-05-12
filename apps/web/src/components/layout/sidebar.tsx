@@ -8,7 +8,6 @@ import {
   Layers,
   LayoutDashboard,
   LogOut,
-  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Rocket,
@@ -17,7 +16,6 @@ import {
   User,
 } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
-import { BRAND_ANCHOR, BRAND_TEXT, BRAND_URL, SPONSOR_URL } from "@/components/brand-guard";
 import { Logo } from "@/components/logo";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useActiveAlerts } from "@/hooks/use-monitoring";

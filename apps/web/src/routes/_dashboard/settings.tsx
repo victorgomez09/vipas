@@ -52,6 +52,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useCurrentUser } from "@/hooks/use-auth";
+import useLBStatus from "@/hooks/use-lb-status";
 import {
   useNotificationChannels,
   useSaveChannel,
@@ -62,7 +63,6 @@ import {
 } from "@/hooks/use-notifications";
 import { useResources } from "@/hooks/use-resources";
 import { useSettings, useUpdateSetting, useVerifyDomain } from "@/hooks/use-settings";
-import useLBStatus from "@/hooks/use-lb-status";
 import {
   useSaveSystemBackupConfig,
   useSystemBackupConfig,
@@ -454,7 +454,7 @@ function GeneralTab() {
     if (!createName || !createKey) return;
     setCreatePending(true);
     try {
-      const data = await api.post<{ ref: string }>('/api/v1/settings/dns-secret', {
+      const data = await api.post<{ ref: string }>("/api/v1/settings/dns-secret", {
         name: createName,
         data: { api_key: createKey },
       });
@@ -462,13 +462,13 @@ function GeneralTab() {
       const ref = data.ref;
       setDnsApiKeyRef(ref);
       // Persist the ref to settings
-      saveDNS.mutate({ key: 'dns_api_key_ref', value: ref });
+      saveDNS.mutate({ key: "dns_api_key_ref", value: ref });
       setCreateDialogOpen(false);
-      setCreateName('');
-      setCreateKey('');
-      toast.success('Secret created and reference saved');
-    } catch (err) {
-      toast.error('Failed to create secret');
+      setCreateName("");
+      setCreateKey("");
+      toast.success("Secret created and reference saved");
+    } catch (_err) {
+      toast.error("Failed to create secret");
     } finally {
       setCreatePending(false);
     }
@@ -703,15 +703,25 @@ function GeneralTab() {
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Secret Name</Label>
-              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="cloudflare-api" />
+              <Input
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="cloudflare-api"
+              />
             </div>
             <div>
               <Label className="text-xs">API Key</Label>
-              <Input value={createKey} onChange={(e) => setCreateKey(e.target.value)} placeholder="sk_xxx" />
+              <Input
+                value={createKey}
+                onChange={(e) => setCreateKey(e.target.value)}
+                placeholder="sk_xxx"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleCreateSecret} disabled={!createName || !createKey}>{createPending ? '...' : 'Create'}</Button>
+            <Button onClick={handleCreateSecret} disabled={!createName || !createKey}>
+              {createPending ? "..." : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -721,8 +731,11 @@ function GeneralTab() {
 
 function LoadBalancerCard({
   settings,
-  saveSetting
-}: { settings: Record<string, string>; saveSetting: ReturnType<typeof useUpdateSetting> }) {
+  saveSetting,
+}: {
+  settings: Record<string, string>;
+  saveSetting: ReturnType<typeof useUpdateSetting>;
+}) {
   const { status, loading } = useLBStatus();
   const [lbType, setLbType] = useState(settings?.lb_type ?? "nodeport");
   const [lbPool, setLbPool] = useState(settings?.lb_ip_pool ?? "");
@@ -732,7 +745,8 @@ function LoadBalancerCard({
     setLbPool(settings?.lb_ip_pool ?? "");
   }, [settings]);
 
-  const isDirty = lbType !== (settings?.lb_type ?? "nodeport") || lbPool !== (settings?.lb_ip_pool ?? "");
+  const isDirty =
+    lbType !== (settings?.lb_type ?? "nodeport") || lbPool !== (settings?.lb_ip_pool ?? "");
 
   function handleSave() {
     saveSetting.mutate({ key: "lb_type", value: lbType });
@@ -784,18 +798,21 @@ function LoadBalancerCard({
                   <strong>Type:</strong> {status.type}
                 </p>
                 <p>
-                  <strong>IP Pools:</strong> {status.ip_pools?.length ? status.ip_pools.join(", ") : "-"}
+                  <strong>IP Pools:</strong>{" "}
+                  {status.ip_pools?.length ? status.ip_pools.join(", ") : "-"}
                 </p>
                 <p>
-                  <strong>Assigned IPs:</strong> {status.assigned_ips?.length ? status.assigned_ips.join(", ") : "-"}
+                  <strong>Assigned IPs:</strong>{" "}
+                  {status.assigned_ips?.length ? status.assigned_ips.join(", ") : "-"}
                 </p>
                 <div>
                   <strong>BGP Peers:</strong>
-                  {status.bgp_peers && status.bgp_peers.length ? (
+                  {status.bgp_peers?.length ? (
                     <ul className="list-inside list-disc ml-4 text-xs">
                       {status.bgp_peers.map((p: any) => (
                         <li key={p.name}>
-                          {p.peer_address} (ASN {p.peer_asn}) {p.source_address ? `— src ${p.source_address}` : ""}
+                          {p.peer_address} (ASN {p.peer_asn}){" "}
+                          {p.source_address ? `— src ${p.source_address}` : ""}
                         </li>
                       ))}
                     </ul>
@@ -859,7 +876,11 @@ function LonghornCard({
           disabled={!dirty || saveSetting.isPending}
           onClick={() => saveSetting.mutate({ key: "longhorn_default_replicas", value: replicas })}
         >
-          {saveSetting.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {saveSetting.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
           {saveSetting.isPending ? "Saving..." : "Save Changes"}
         </Button>
       </CardHeader>
@@ -872,12 +893,15 @@ function LonghornCard({
             </SelectTrigger>
             <SelectContent>
               {["1", "2", "3", "4", "5"].map((v) => (
-                <SelectItem key={v} value={v}>{v} Replicas</SelectItem>
+                <SelectItem key={v} value={v}>
+                  {v} Replicas
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            New volumes created using the HA Storage class will use this number of replicas by default.
+            New volumes created using the HA Storage class will use this number of replicas by
+            default.
           </p>
         </div>
 
@@ -885,13 +909,13 @@ function LonghornCard({
           <Info className="h-3.5 w-3.5 shrink-0" />
           <p>
             Access the native dashboard for advanced management:{" "}
-            <a 
-              href={`http://longhorn.${settings?.base_domain || 'local'}`} 
-              target="_blank" 
-              rel="noreferrer" 
+            <a
+              href={`http://longhorn.${settings?.base_domain || "local"}`}
+              target="_blank"
+              rel="noreferrer"
               className="underline font-medium hover:text-blue-500"
             >
-              longhorn.{settings?.base_domain || 'local'}
+              longhorn.{settings?.base_domain || "local"}
             </a>
           </p>
         </div>
@@ -1140,8 +1164,8 @@ function BackupTab() {
         <CardContent>
           <p className="text-sm text-muted-foreground">
             Configure automatic DNS provisioning via external-dns. In development the default
-            provider is <strong>coredns</strong> (no external API). In production choose a
-            supported provider and supply a secure API key reference.
+            provider is <strong>coredns</strong> (no external API). In production choose a supported
+            provider and supply a secure API key reference.
           </p>
         </CardContent>
       </Card>

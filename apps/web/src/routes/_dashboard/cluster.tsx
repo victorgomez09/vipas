@@ -71,9 +71,9 @@ import {
   useClusterNodes,
   useClusterPods,
   useClusterPVCs,
-  useEtcdQuorumStatus,
   useClusterTopology,
   useDaemonSets,
+  useEtcdQuorumStatus,
   useHelmReleases,
   useNodeMetrics,
   useNodePools,
@@ -199,16 +199,16 @@ function ClusterPage() {
   // Compute CPU/Memory percentages from nodeMetrics
   const cpuPct = nodeMetrics?.length
     ? pctString(
-      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_used), 0)}m`,
-      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_total), 0)}m`,
-    )
+        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_used), 0)}m`,
+        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.cpu_total), 0)}m`,
+      )
     : "N/A";
 
   const memPct = nodeMetrics?.length
     ? pctString(
-      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_used), 0)}Mi`,
-      `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_total), 0)}Mi`,
-    )
+        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_used), 0)}Mi`,
+        `${nodeMetrics.reduce((a, n) => a + parseResourceValue(n.mem_total), 0)}Mi`,
+      )
     : "N/A";
 
   return (
@@ -268,7 +268,11 @@ function ClusterPage() {
             {nodesError ? (
               <ErrorBanner message="Failed to load nodes" />
             ) : (
-              <NodesTab nodes={nodes ?? []} nodeMetrics={nodeMetrics ?? []} etcdQuorum={etcdQuorum} />
+              <NodesTab
+                nodes={nodes ?? []}
+                nodeMetrics={nodeMetrics ?? []}
+                etcdQuorum={etcdQuorum}
+              />
             )}
           </TabsContent>
 
@@ -1648,20 +1652,22 @@ function ClusterHealthTab() {
       <Card>
         <CardContent className="flex items-center gap-3 py-4">
           <div
-            className={`flex h-9 w-9 items-center justify-center rounded-full ${totalIssues === 0
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${
+              totalIssues === 0
                 ? "bg-green-500/10"
                 : totalIssues <= 5
                   ? "bg-amber-500/10"
                   : "bg-red-500/10"
-              }`}
+            }`}
           >
             <HeartPulse
-              className={`h-5 w-5 ${totalIssues === 0
+              className={`h-5 w-5 ${
+                totalIssues === 0
                   ? "text-green-500"
                   : totalIssues <= 5
                     ? "text-amber-500"
                     : "text-red-500"
-                }`}
+              }`}
             />
           </div>
           <div>

@@ -243,7 +243,8 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
   return (
     <Card>
       <CardContent className="p-0">
-        <div
+        <button
+          type="button"
           className="flex w-full items-center gap-4 p-4 text-left hover:bg-muted/50 cursor-pointer"
           onClick={() => setExpanded(!expanded)}
         >
@@ -318,7 +319,7 @@ function DeploymentRow({ deployment, appId }: { deployment: Deployment; appId: s
               </Button>
             </div>
           )}
-        </div>
+        </button>
 
         {/* Expanded build log */}
         {expanded && (

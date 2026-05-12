@@ -247,9 +247,7 @@ export function GeneralTab({
               </p>
             ))
           ) : (
-            <p className="mt-3 text-sm">
-              No internal ports configured (Worker/Tool mode)
-            </p>
+            <p className="mt-3 text-sm">No internal ports configured (Worker/Tool mode)</p>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
             Accessible from any service in the {app.namespace || "default"} namespace

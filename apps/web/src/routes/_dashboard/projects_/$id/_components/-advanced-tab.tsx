@@ -11,16 +11,15 @@ import {
   Plus,
   Save,
   Server,
-  Database as StorageIcon,
   Settings2,
   Shield,
+  Database as StorageIcon,
   Timer,
   Trash2,
   X,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { DangerZone } from "@/components/danger-zone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -527,9 +526,7 @@ function ResourcesCard({ app, appId }: { app: App; appId: string }) {
 
 function PortsCard({ app, appId }: { app: App; appId: string }) {
   const updateApp = useUpdateApp(appId);
-  const [ports, setPorts] = useState<PortMapping[]>(
-    app.ports || []
-  );
+  const [ports, setPorts] = useState<PortMapping[]>(app.ports || []);
 
   const serialize = (p: PortMapping[]) =>
     p.map((x) => `${x.container_port}:${x.service_port}:${x.protocol}`).join(",");
@@ -1174,7 +1171,10 @@ function StorageCard({ app, appId }: { app: App; appId: string }) {
       dirty={dirty}
       saving={updateApp.isPending}
       onSave={() =>
-        updateApp.mutate({ storage_class: storageClass, longhorn_replicas: Number(longhornReplicas) })
+        updateApp.mutate({
+          storage_class: storageClass,
+          longhorn_replicas: Number(longhornReplicas),
+        })
       }
     >
       <div className="space-y-4">
@@ -1190,7 +1190,7 @@ function StorageCard({ app, appId }: { app: App; appId: string }) {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {storageClass === "longhorn" 
+            {storageClass === "longhorn"
               ? "Data will be replicated across nodes. Safe for multi-node clusters."
               : "Data stays on the node where the pod is running. Faster, but not HA."}
           </p>
@@ -1218,12 +1218,15 @@ function StorageCard({ app, appId }: { app: App; appId: string }) {
         )}
         {storageClass === "longhorn" && (
           <div className="flex flex-col gap-2">
-            <InfoBanner>Longhorn manages volume snapshots and replication automatically.</InfoBanner>
+            <InfoBanner>
+              Longhorn manages volume snapshots and replication automatically.
+            </InfoBanner>
             <p className="text-[10px] text-muted-foreground px-1">
               Global storage defaults can be managed in{" "}
               <Link to="/settings" className="text-primary underline underline-offset-4">
                 System Settings
-              </Link>.
+              </Link>
+              .
             </p>
           </div>
         )}

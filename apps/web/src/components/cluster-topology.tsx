@@ -253,12 +253,7 @@ function buildGraph(topo: TopoData): { nodes: Node[]; edges: Edge[] } {
     // Route → Service
     if (r.service) {
       edges.push(
-        makeEdge(
-          `e-route-svc-${i}`,
-          id,
-          `svc-${r.namespace}-${r.service}`,
-          TYPE_META.route.color,
-        ),
+        makeEdge(`e-route-svc-${i}`, id, `svc-${r.namespace}-${r.service}`, TYPE_META.route.color),
       );
     }
   });

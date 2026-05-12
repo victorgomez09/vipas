@@ -180,8 +180,8 @@ function DeploymentRow({ deploy }: { deploy: Deployment }) {
   const duration =
     deploy.started_at && deploy.finished_at
       ? formatDuration(
-        new Date(deploy.finished_at).getTime() - new Date(deploy.started_at).getTime(),
-      )
+          new Date(deploy.finished_at).getTime() - new Date(deploy.started_at).getTime(),
+        )
       : deploy.started_at
         ? "running..."
         : "-";
